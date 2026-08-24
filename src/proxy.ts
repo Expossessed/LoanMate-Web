@@ -67,7 +67,7 @@ export async function proxy(request: NextRequest) {
 
   return supabaseResponse
 }
-
+//yeah
 export const config = {
   matcher: [
     '/home/:path*',
