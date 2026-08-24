@@ -46,7 +46,7 @@ function buildSchema(authorizedLimit: number, alreadyContributed: number) {
   const available = Math.max(0, authorizedLimit - alreadyContributed)
   return z.object({
     principal: z
-      .number({ invalid_type_error: 'Enter a valid amount.' })
+      .number()
       .min(500, 'Minimum deposit is ₱500.')
       .max(available, `Maximum available is ${formatCurrency(available)}.`),
     term_months: z.number().refine(
@@ -144,7 +144,7 @@ export default function ProvideCapitalPage() {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
     defaultValues: { term_months: 6 },
   })
 
@@ -219,7 +219,7 @@ export default function ProvideCapitalPage() {
 
         {/* ── Form ────────────────────────────────────────────── */}
         <form
-          onSubmit={handleSubmit((v) => mutation.mutate(v))}
+          onSubmit={handleSubmit((v) => mutation.mutate(v)) as any}
           className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6"
         >
           {/* Principal input */}
