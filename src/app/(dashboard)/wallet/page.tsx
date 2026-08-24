@@ -186,7 +186,15 @@ export default function WalletPage() {
       const newRemaining = (data?.totalRemaining ?? 0) - actual
       if (newRemaining <= 0 && data?.activeLoanIds?.length) {
         for (const loanId of data.activeLoanIds) {
-          await supabase.rpc('release_loan_pledges', { p_loan_id: loanId }).catch(() => {})
+          const { error } = await supabase.rpc('release_loan_pledges', {
+            p_loan_id: loanId,
+          })
+          if (error) {
+            console.error(
+              `Failed to release pledges for loan ${loanId}:`,
+              error
+    )
+  }
         }
         return { actual, fullyPaid: true }
       }
