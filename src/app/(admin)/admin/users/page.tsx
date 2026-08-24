@@ -56,7 +56,7 @@ export default function AdminUsersPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 truncate">
-                    {u.first_name} {u.last_name}
+                    {String(u.first_name ?? '')} {String(u.last_name ?? '')}
                   </p>
                   <p className="text-xs font-mono text-gray-400">{String(u.student_id)}</p>
                 </div>
