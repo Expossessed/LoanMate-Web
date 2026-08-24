@@ -130,6 +130,7 @@ function AmountDialog({
 export default function WalletPage() {
   const { profile } = useAuth()
   const userId = profile?.id
+  const isLender = profile?.is_lender ?? false
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -185,7 +186,15 @@ export default function WalletPage() {
       const newRemaining = (data?.totalRemaining ?? 0) - actual
       if (newRemaining <= 0 && data?.activeLoanIds?.length) {
         for (const loanId of data.activeLoanIds) {
-          await supabase.rpc('release_loan_pledges', { p_loan_id: loanId }).catch(() => {})
+          const { error } = await supabase.rpc('release_loan_pledges', {
+            p_loan_id: loanId,
+          })
+          if (error) {
+            console.error(
+              `Failed to release pledges for loan ${loanId}:`,
+              error
+    )
+  }
         }
         return { actual, fullyPaid: true }
       }
@@ -262,7 +271,7 @@ export default function WalletPage() {
           confirmLabel="Pay" confirmClass="bg-red-500 hover:bg-red-600"
           max={data?.walletBalance} onConfirm={(n) => payLoanMutation.mutate(n)} onClose={() => setDialog(null)} />
       )}
-      {dialog === 'save' && (
+      {dialog === 'save' && !isLender && (
         <AmountDialog title="Add to Savings" subtitle={`Available balance: ${formatCurrency(data?.walletBalance ?? 0)}`}
           confirmLabel="Save" confirmClass="bg-[var(--brand-green-dark)] hover:opacity-90"
           max={data?.walletBalance} onConfirm={(n) => savingsMutation.mutate(n)} onClose={() => setDialog(null)} />
@@ -307,8 +316,8 @@ export default function WalletPage() {
             </div>
           )}
 
-          {/* Remaining loan card */}
-          {(data?.totalRemaining ?? 0) > 0 && (
+          {/* Remaining loan card — students only */}
+          {!isLender && (data?.totalRemaining ?? 0) > 0 && (
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
               <div className="flex items-center justify-between">
                 <div>
@@ -334,7 +343,8 @@ export default function WalletPage() {
             </div>
           )}
 
-          {/* Savings Goal card */}
+          {/* Savings Goal card — students only; lenders cannot add to savings */}
+          {!isLender && (
           <div className="bg-white rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -385,6 +395,7 @@ export default function WalletPage() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Transaction List */}
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">

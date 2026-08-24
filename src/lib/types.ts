@@ -11,28 +11,39 @@
 // ─── Auth / Users ──────────────────────────────────────────────────────────────
 
 /** The role a user can have in the system. */
-export type UserRole = 'student' | 'admin' | 'finance_officer'
+export type UserRole = 'student' | 'lender' | 'admin' | 'finance_officer'
 
 /**
- * Row from the `users` table.
+ * Row from the `users` table — lean base identity shared by every account type.
  * Linked 1:1 to Supabase Auth's `auth.users` by `id`.
  */
 export interface User {
   id: string
-  student_id: string
   first_name: string
   last_name: string
-  course: string
-  year_level: string
+  address: string | null
+  contact_number: string | null
   role: UserRole
-  /** True when the user also acts as a lender (has a lender_profile row). */
+  /** True when the user also acts as a lender (has a lender_profiles row). */
   is_lender: boolean
-  enrollment_status: string
-  /** URL to the uploaded requirements document (Study Load, etc.). */
-  requirements_url: string | null
-  /** True if this user has ever had a pledge forfeited. */
-  has_forfeiture_history: boolean
   agreed_to_terms: boolean
+  created_at: string
+}
+
+/**
+ * Row from the `student_profiles` table.
+ * One row per user where role = 'student' OR role = 'lender'
+ * (every lender is also a university student).
+ */
+export interface StudentProfile {
+  id: string                          // FK → users.id
+  student_id: string                  // school-issued Student ID
+  course: string | null
+  year_level: number | null
+  enrollment_status: string           // default 'enrolled'
+  has_forfeiture_history: boolean
+  /** URL to the uploaded Study Load document. */
+  requirements_url: string | null
   created_at: string
 }
 
@@ -168,7 +179,10 @@ export interface Notification {
 
 // ─── Login Attempts (lockout) ─────────────────────────────────────────────────
 
-/** Row from the `login_attempts` table. */
+/**
+ * Row from the `login_attempts` table.
+ * Keyed by student_id (from student_profiles) for lockout tracking.
+ */
 export interface LoginAttempt {
   student_id: string
   attempt_count: number
@@ -179,12 +193,21 @@ export interface LoginAttempt {
 
 // ─── Lender ───────────────────────────────────────────────────────────────────
 
-/** Row from the `lender_profiles` table. */
+/**
+ * Row from the `lender_profiles` table.
+ * One row per user where is_lender = true.
+ */
 export interface LenderProfile {
-  id: string
-  user_id: string
-  verified: boolean
-  created_at: string
+  id: string                          // FK → users.id
+  organization: string | null
+  authorized_limit: number
+  total_contributed: number
+  total_deposited: number
+  total_paid_out: number
+  is_active: boolean
+  /** URL to the uploaded Valid ID document. */
+  requirements_url: string | null
+  joined_at: string
 }
 
 export type DepositStatus =
@@ -203,8 +226,13 @@ export interface LenderDeposit {
   term_months: number
   expected_return: number
   maturity_amount: number
+  deposited_at: string
   maturity_date: string
+  processed_at: string | null
+  matured_at: string | null
   status: DepositStatus
+  processed_by: string | null
+  notes: string | null
   created_at: string
 }
 
@@ -219,7 +247,10 @@ export interface LenderWithdrawal {
   penalty_amount: number
   net_payout: number
   status: WithdrawalStatus
-  created_at: string
+  requested_at: string
+  processed_by: string | null
+  processed_at: string | null
+  rejection_note: string | null
 }
 
 // ─── Utility / UI ─────────────────────────────────────────────────────────────
@@ -233,13 +264,18 @@ export function getStatusColor(status: string): string {
     case 'active':
     case 'approved':
     case 'paid':
+    case 'completed':
+    case 'paid_out':
       return 'text-green-700 bg-green-50 border-green-200'
     case 'pending':
       return 'text-orange-700 bg-orange-50 border-orange-200'
+    case 'matured':
+      return 'text-blue-700 bg-blue-50 border-blue-200'
     case 'overdue':
     case 'rejected':
     case 'denied':
     case 'forfeited':
+    case 'withdrawn_early':
       return 'text-red-700 bg-red-50 border-red-200'
     case 'released':
       return 'text-blue-700 bg-blue-50 border-blue-200'

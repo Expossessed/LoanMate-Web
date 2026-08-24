@@ -30,7 +30,7 @@ export default function AdminDepositsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-bold text-gray-900">{formatCurrency(Number(d.principal ?? 0))}</p>
-                  <p className="text-xs text-gray-400">{d.term_months} months · {Number(d.return_rate ?? 0)*100}% return</p>
+                  <p className="text-xs text-gray-400">{String(d.term_months ?? 0)} months · {Number(d.return_rate ?? 0)*100}% return</p>
                 </div>
                 <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
                   String(d.status) === 'active' ? 'bg-green-50 text-green-700 border-green-200'
