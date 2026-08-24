@@ -115,8 +115,9 @@ function SettingsTile({
 export default function ProfilePage() {
   const router = useRouter()
   const queryClient = useQueryClient()
-  const { profile, isLoading: authLoading } = useAuth()
+  const { profile, studentProfile, isLoading: authLoading } = useAuth()
   const userId = profile?.id
+  const isLender = profile?.is_lender ?? false
 
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ['pending-pledges', userId],
@@ -172,11 +173,11 @@ export default function ProfilePage() {
             {fullName || 'Loading…'}
           </p>
           <p className="text-sm font-mono text-gray-500 mt-0.5">
-            Student ID: {profile?.student_id ?? '—'}
+            Student ID: {studentProfile?.student_id ?? '—'}
           </p>
-          {profile?.course && (
+          {studentProfile?.course && (
             <p className="text-sm text-gray-400 mt-0.5">
-              {profile.course.toUpperCase()} — Year {profile.year_level}
+              {studentProfile.course.toUpperCase()} — Year {studentProfile.year_level}
             </p>
           )}
         </div>
@@ -188,19 +189,19 @@ export default function ProfilePage() {
           id="edit-personal-details-btn"
           Icon={PencilLineIcon}
           label="Edit Personal Details"
-          onClick={() => alert('Edit Personal Details — coming soon!')}
+          href="/settings"
         />
         <SettingsTile
           id="change-password-btn"
           Icon={LockKeyholeIcon}
           label="Change Password"
-          onClick={() => alert('Change Password — coming soon!')}
+          href="/settings"
         />
         <SettingsTile
           id="account-settings-btn"
           Icon={SettingsIcon}
-          label="View Account Settings"
-          onClick={() => alert('Account Settings — coming soon!')}
+          label="Account Settings"
+          href="/settings"
         />
         {/* Pledge Inbox — shows badge when there are pending invites */}
         <SettingsTile
@@ -211,6 +212,35 @@ export default function ProfilePage() {
           hasBadge
           href="/pledge-inbox"
         />
+
+        {/* Lender tiles — mobile only (desktop uses the sidebar) */}
+        {isLender && (
+          <>
+            <div className="pt-2 pb-1">
+              <p className="text-xs font-bold tracking-widest text-gray-400 uppercase">
+                Lender
+              </p>
+            </div>
+            <SettingsTile
+              id="track-deposits-btn"
+              Icon={SettingsIcon}
+              label="Track Deposits"
+              href="/lender/track-deposits"
+            />
+            <SettingsTile
+              id="withdraw-btn"
+              Icon={LockKeyholeIcon}
+              label="Request Withdrawal"
+              href="/lender/withdraw"
+            />
+            <SettingsTile
+              id="fund-loan-btn"
+              Icon={PencilLineIcon}
+              label="Fund a Loan"
+              href="/lender/fund-loan"
+            />
+          </>
+        )}
       </div>
 
       {/* ── Sign out ────────────────────────────────────────────────── */}

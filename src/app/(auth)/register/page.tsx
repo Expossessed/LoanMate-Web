@@ -40,6 +40,7 @@ import {
 
 import { createClient } from '@/lib/supabase/client'
 import { toEmail } from '@/lib/types'
+import { callGeminiEvaluate } from '@/lib/gemini-client'
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
@@ -87,29 +88,71 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
   if (!auth.session) throw new Error('NEEDS_CONFIRMATION')
 
   const userId = auth.user.id
+  const isStudent = values.accountType === 'Student'
 
-  // 2. Insert users row
-  await supabase.from('users').insert({
+  // 2. Insert lean users row — role reflects actual account type
+  const { error: userErr } = await supabase.from('users').insert({
     id: userId,
-    student_id: values.studentId,
     first_name: values.firstName,
     last_name: values.lastName,
-    course: values.accountType === 'Student' ? values.course : 'N/A',
-    year_level: values.accountType === 'Student' ? values.yearLevel : 'N/A',
-    enrollment_status: 'Active',
-    role: values.accountType.toLowerCase(),
+    role: isStudent ? 'student' : 'lender',
+    is_lender: !isStudent,
     agreed_to_terms: true,
   })
+  if (userErr) throw new Error(`Failed to create account: ${userErr.message}`)
 
-  // 3. Insert wallet — get back the id
-  const { data: walletRow } = await supabase
+  // 3. Upload document (Study Load for students, Valid ID for lenders)
+  let requirementsUrl = ''
+  if (studyLoadFile) {
+    const ext = studyLoadFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+    const folder = isStudent ? 'study_load' : 'valid_id'
+    const fileName = `${folder}_${userId}_${Date.now()}.${ext}`
+    const bytes = await studyLoadFile.arrayBuffer()
+    const { error: uploadErr } = await supabase.storage
+      .from('documents')
+      .upload(fileName, bytes, { contentType: studyLoadFile.type, upsert: true })
+    if (!uploadErr) {
+      requirementsUrl = supabase.storage.from('documents').getPublicUrl(fileName).data.publicUrl
+    }
+  }
+
+  // 4a. Insert student_profiles — required for ALL account types.
+  //     Lenders are university students too, so this row must always exist.
+  //     For lenders: requirements_url stores the Study Load (if provided at registration).
+  //     Requires RLS: allow insert with check (auth.uid() = id)
+  const { error: spErr } = await supabase.from('student_profiles').insert({
+    id: userId,
+    student_id: values.studentId,
+    course: values.course ?? null,
+    year_level: values.yearLevel ? parseInt(values.yearLevel, 10) : null,
+    enrollment_status: 'enrolled',
+    has_forfeiture_history: false,
+    // Students: their uploaded study load URL; lenders: null here (Valid ID goes to lender_profiles)
+    requirements_url: isStudent ? (requirementsUrl || null) : null,
+  })
+  if (spErr) throw new Error(`Failed to save student profile: ${spErr.message}`)
+
+  // 4b. Insert lender_profiles row (lenders only)
+  //     requirements_url stores the Valid ID document URL.
+  //     Requires RLS: allow insert with check (auth.uid() = id)
+  if (!isStudent) {
+    const { error: lpErr } = await supabase.from('lender_profiles').insert({
+      id: userId,
+      requirements_url: requirementsUrl || null,
+    })
+    if (lpErr) throw new Error(`Failed to save lender profile: ${lpErr.message}`)
+  }
+
+  // 5. Insert wallet — get back the id
+  const { data: walletRow, error: walletErr } = await supabase
     .from('wallet')
     .insert({ user_id: userId, balance: 0, savings_goal: 0, current_savings: 0 })
     .select('id')
     .single()
-  const walletId = walletRow?.id as string
+  if (walletErr) console.warn('[signUp] wallet insert failed:', walletErr.message)
+  const walletId = walletRow?.id as string | undefined
 
-  // 4. Welcome notification (non-fatal)
+  // 6. Welcome notification (non-fatal)
   await supabase.from('notifications').insert({
     user_id: userId,
     type: 'Welcome',
@@ -118,7 +161,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     created_at: new Date().toISOString(),
   }).then(() => {}, () => {})
 
-  // 5. Init transaction (non-fatal)
+  // 7. Init transaction (non-fatal)
   if (walletId) {
     await supabase.from('transactions').insert({
       wallet_id: walletId,
@@ -129,66 +172,112 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     }).then(() => {}, () => {})
   }
 
-  // 6. Upload study load & insert documents row (non-fatal)
-  let fileUrl = ''
-  if (studyLoadFile) {
-    const ext = studyLoadFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
-    const fileName = `study_load_${userId}_${Date.now()}.${ext}`
-    const bytes = await studyLoadFile.arrayBuffer()
-    const { error: uploadErr } = await supabase.storage
-      .from('documents')
-      .upload(fileName, bytes, { contentType: studyLoadFile.type, upsert: true })
-    if (!uploadErr) {
-      fileUrl = supabase.storage.from('documents').getPublicUrl(fileName).data.publicUrl
-    }
+  // 8. Record the uploaded document (non-fatal)
+  if (requirementsUrl) {
+    await supabase.from('documents').insert({
+      user_id: userId,
+      loan_id: null,
+      file_url: requirementsUrl,
+      uploaded_at: new Date().toISOString(),
+    }).then(() => {}, () => {})
   }
-  await supabase.from('documents').insert({
-    user_id: userId,
-    loan_id: null,
-    file_url: fileUrl,
-    uploaded_at: new Date().toISOString(),
-  }).then(() => {}, () => {})
 }
+
+
+
 
 // ─── AI Evaluation Dialog ─────────────────────────────────────────────────────
 
 const AI_STEPS = [
   'Scanning study load document...',
-  'Verifying tuition balance...',
+  'Verifying student information...',
   'Running AI evaluation...',
 ]
 
-function AiEvaluatingDialog({ onApproved }: { onApproved: () => void }) {
+function AiEvaluatingDialog({
+  studyLoadFile,
+  studentName,
+  studentId,
+  onApproved,
+  onRejected,
+}: {
+  studyLoadFile: File | null
+  studentName: string
+  studentId: string
+  onApproved: () => void
+  onRejected: (reason: string) => void
+}) {
   const [stepIdx, setStepIdx] = useState(0)
   const [dots, setDots] = useState(0)
-  const [approved, setApproved] = useState(false)
+  const [result, setResult] = useState<'pending' | 'approved' | 'rejected' | 'manual_review'>('pending')
+  const [rejectReason, setRejectReason] = useState('')
 
   useEffect(() => {
-    let elapsed = 0
+    // Cycle through steps visually
     const iv = setInterval(() => {
-      elapsed += 900
       setDots((d) => {
         const next = (d + 1) % 4
         if (next === 0) setStepIdx((s) => (s + 1) % AI_STEPS.length)
         return next
       })
-      if (elapsed >= 3000) {
-        clearInterval(iv)
-        setApproved(true)
+    }, 700)
+
+    // Call real Gemini
+    const files = studyLoadFile
+      ? [{ file: studyLoadFile, label: 'Study Load' }]
+      : []
+
+    callGeminiEvaluate({
+      files,
+      studentName,
+      studentId,
+      requestedAmount: 0,
+      maxLoanCap: 50000,
+      context: 'register',
+    }).then((res) => {
+      clearInterval(iv)
+      if (res.recommendation === 'reject') {
+        setRejectReason(res.reasoning)
+        setResult('rejected')
+      } else {
+        // approve or manual_review both allow registration
+        setResult(res.recommendation === 'approve' ? 'approved' : 'manual_review')
       }
-    }, 900)
+    })
+
     return () => clearInterval(iv)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (approved) {
+  if (result === 'rejected') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
+        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
+          <XIcon size={52} className="mx-auto mb-4 text-red-500" />
+          <h2 className="text-lg font-bold mb-3 text-red-600">Document Rejected</h2>
+          <p className="text-sm text-gray-600 leading-relaxed mb-6">{rejectReason}</p>
+          <button
+            id="ai-rejected-close-btn"
+            onClick={() => onRejected(rejectReason)}
+            className="w-full py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (result === 'approved' || result === 'manual_review') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
         <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
           <CheckCircleIcon size={64} className="mx-auto mb-4 text-[var(--brand-green)]" />
           <h2 className="text-lg font-bold mb-3">AI Evaluation Approved</h2>
           <p className="text-sm text-gray-600 leading-relaxed mb-6">
-            Your Study Load has been reviewed and your registration is approved.
-            Your account is being created now.
+            {result === 'approved'
+              ? 'Your Study Load has been verified. Your registration is approved.'
+              : 'Your document will be manually reviewed. Registration will proceed.'}
           </p>
           <button
             id="ai-approved-continue-btn"
@@ -267,16 +356,11 @@ export default function RegisterPage() {
   const [aiApproved, setAiApproved] = useState(false)
   const pendingSubmitRef = useRef<RegisterForm | null>(null)
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<RegisterForm>({
+  const watchedValues = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: { accountType: 'Student', agreeToTerms: false },
   })
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = watchedValues
 
   const accountType = watch('accountType')
   const agreeToTerms = watch('agreeToTerms')
@@ -325,6 +409,12 @@ export default function RegisterPage() {
     }
   }
 
+  /** Called when AI rejects the study load */
+  const handleAiRejected = (reason: string) => {
+    setShowAi(false)
+    toast.error(`Document rejected: ${reason}`)
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null
     setStudyLoadFile(file)
@@ -333,7 +423,15 @@ export default function RegisterPage() {
 
   return (
     <>
-      {showAi && <AiEvaluatingDialog onApproved={handleAiApproved} />}
+      {showAi && (
+        <AiEvaluatingDialog
+          studyLoadFile={studyLoadFile}
+          studentName={`${watch('firstName')} ${watch('lastName')}`.trim()}
+          studentId={watch('studentId')}
+          onApproved={handleAiApproved}
+          onRejected={handleAiRejected}
+        />
+      )}
       {showTerms && <TermsDialog onClose={() => setShowTerms(false)} />}
 
       <div className="min-h-screen lg:min-h-0 flex flex-col bg-gray-50">
