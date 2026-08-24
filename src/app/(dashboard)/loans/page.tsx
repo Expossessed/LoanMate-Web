@@ -18,6 +18,8 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import {
   TrendingUpIcon,
   CalendarIcon,
@@ -269,18 +271,32 @@ function ActivityItemIcon({ icon }: { icon: string }) {
 
 export default function LoansPage() {
   const { profile } = useAuth()
+  const router = useRouter()
   const userId = profile?.id
+
+  // Lenders don't have personal loans — redirect to their deposit tracker.
+  // Using useEffect instead of an early return to avoid a Rules-of-Hooks violation
+  // (useQuery below must always run regardless of role).
+  const isLender = profile?.is_lender ?? false
+  useEffect(() => {
+    if (profile && isLender) {
+      router.replace('/lender/track-deposits')
+    }
+  }, [profile, isLender, router])
 
   const { data, isLoading } = useQuery({
     queryKey: ['loans', userId],
     queryFn: () => fetchLoansData(userId!),
-    enabled: !!userId,
+    enabled: !!userId && !isLender, // skip query entirely for lenders
   })
 
   const totalPaid = (data?.totalOriginalAmount ?? 0) - (data?.totalRemainingBalance ?? 0)
   const progress = data?.totalOriginalAmount
     ? Math.min(totalPaid / data.totalOriginalAmount, 1)
     : 0
+
+  // While redirect is in flight, render nothing
+  if (isLender) return null
 
   return (
     <div className="min-h-screen">

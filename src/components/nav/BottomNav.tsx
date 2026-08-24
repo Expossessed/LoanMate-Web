@@ -3,10 +3,11 @@
 /**
  * BottomNav — Mobile navigation (hidden on md+)
  *
- * Mirrors Flutter DashboardScreen's BottomNavigationBar.
- * Visible only on mobile (<768px). On md+ the Sidebar handles navigation.
+ * Student: HOME | APPLY    | TRACK    | WALLET | PROFILE
+ * Lender:  HOME | FUND     | DEPOSITS | WALLET | PROFILE
  *
- * Active item: green pill background (same pill style as Flutter).
+ * Settings is accessible via the sidebar on desktop and via the
+ * Profile page link on mobile.
  */
 
 import Link from 'next/link'
@@ -17,21 +18,29 @@ import {
   TrendingUpIcon,
   WalletIcon,
   UserIcon,
+  BarChart2Icon,
+  BanknoteIcon,
 } from 'lucide-react'
-
-const studentTabs = [
-  { href: '/home',    label: 'HOME',    Icon: HomeIcon },
-  { href: '/apply',   label: 'APPLY',   Icon: FileTextIcon },
-  { href: '/loans',   label: 'TRACK',   Icon: TrendingUpIcon },
-  { href: '/wallet',  label: 'WALLET',  Icon: WalletIcon },
-  { href: '/profile', label: 'PROFILE', Icon: UserIcon },
-]
+import { useAuth } from '@/hooks/useAuth'
 
 export function BottomNav() {
   const pathname = usePathname()
+  const { profile } = useAuth()
+  const isLender = profile?.is_lender ?? false
+
+  const tabs = [
+    { href: '/home',    label: 'HOME',    Icon: HomeIcon },
+    isLender
+      ? { href: '/lender/fund-loan',      label: 'FUND',     Icon: BanknoteIcon }
+      : { href: '/apply',                  label: 'APPLY',    Icon: FileTextIcon },
+    isLender
+      ? { href: '/lender/track-deposits', label: 'FUNDED',   Icon: BarChart2Icon }
+      : { href: '/loans',                  label: 'TRACK',    Icon: TrendingUpIcon },
+    { href: '/wallet',  label: 'WALLET',  Icon: WalletIcon },
+    { href: '/profile', label: 'PROFILE', Icon: UserIcon },
+  ]
 
   return (
-    // Shown only on mobile, fixed to bottom
     <nav
       className="
         md:hidden fixed bottom-0 inset-x-0 z-30
@@ -41,7 +50,7 @@ export function BottomNav() {
         shadow-[0_-4px_12px_rgba(0,0,0,0.06)]
       "
     >
-      {studentTabs.map(({ href, label, Icon }) => {
+      {tabs.map(({ href, label, Icon }) => {
         const active = pathname === href || pathname.startsWith(href + '/')
         return (
           <Link

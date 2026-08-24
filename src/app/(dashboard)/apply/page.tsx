@@ -1,32 +1,336 @@
 'use client'
 
 /**
- * Apply Page — placeholder
+ * Apply Page — multi-step loan application wizard.
+ * Mirrors Flutter ApplyTab exactly:
+ *   Step 1 → Loan type + personal details + mobile
+ *   Step 2 → Amount + term + purpose + loan estimate + collateral pool
+ *   Step 3 → Document upload + submit
  *
- * The full loan application form (multi-step: Purpose → Amount → Documents →
- * Collateral/Buddy → Submit) is the next phase of migration.
- * This placeholder ensures navigation works so the app can be demoed end-to-end.
+ * Submit flow (mirrors _handleSubmit):
+ *   1. Insert into `loans`
+ *   2. Insert `loan_pledges` (self + buddies)
+ *   3. Call lock_self_pledge RPC
+ *   4. Upload docs to Supabase Storage → insert into `documents`
+ *   5. Gemini AI evaluation (server-side /api/ai-evaluate)
+ *   6. Call set_loan_ai_evaluation RPC
+ *   7. Show result dialog, reset form
  */
 
-import Link from 'next/link'
-import { FileTextIcon } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { CheckCircleIcon, XCircleIcon, ClockIcon } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  INITIAL_FORM,
+  fmt,
+  type ApplyFormState,
+  type AiResult,
+} from '@/lib/apply-helpers'
+import { callGeminiEvaluate } from '@/lib/gemini-client'
+import Step1LoanType from '@/components/apply/Step1LoanType'
+import Step2LoanDetails from '@/components/apply/Step2LoanDetails'
+import Step3Documents from '@/components/apply/Step3Documents'
+
+// ─── Step progress indicator ──────────────────────────────────────────────────
+
+function StepBar({ current }: { current: 1 | 2 | 3 }) {
+  return (
+    <div>
+      <div className="flex gap-2">
+        {[1, 2, 3].map((s) => (
+          <div
+            key={s}
+            className={[
+              'flex-1 h-1 rounded-full transition-colors duration-300',
+              s <= current ? 'bg-red-400' : 'bg-white/20',
+            ].join(' ')}
+          />
+        ))}
+      </div>
+      <p className="text-[11px] font-mono text-white/60 mt-2">Step {current} of 3</p>
+    </div>
+  )
+}
+
+// ─── AI Result dialog ─────────────────────────────────────────────────────────
+
+function AiResultDialog({
+  result,
+  onClose,
+}: {
+  result: AiResult
+  onClose: () => void
+}) {
+  const isApprove = result.decision === 'approve'
+  const isReject = result.decision === 'reject'
+
+  const title = isApprove
+    ? '✅ Application Pre-Approved'
+    : isReject
+    ? '❌ Application Rejected'
+    : '⏳ Pending Manual Review'
+
+  const subtitle = isApprove
+    ? 'Your loan application has been pre-approved by our AI system and will be reviewed by an admin.'
+    : isReject
+    ? `Your application was not approved at this time. ${result.reason ?? ''}`
+    : `Your application has been submitted for manual review. ${result.reason ?? ''}`
+
+  const accent = isApprove
+    ? 'bg-[var(--brand-green)]'
+    : isReject
+    ? 'bg-red-500'
+    : 'bg-orange-500'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 px-4">
+      <div className="bg-white w-full max-w-sm rounded-3xl p-7 shadow-2xl flex flex-col items-center gap-4 text-center">
+        <div
+          className={`flex items-center justify-center w-16 h-16 rounded-full ${
+            isApprove
+              ? 'bg-green-100'
+              : isReject
+              ? 'bg-red-100'
+              : 'bg-orange-100'
+          }`}
+        >
+          {isApprove ? (
+            <CheckCircleIcon size={36} className="text-[var(--brand-green)]" />
+          ) : isReject ? (
+            <XCircleIcon size={36} className="text-red-500" />
+          ) : (
+            <ClockIcon size={36} className="text-orange-500" />
+          )}
+        </div>
+        <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+        {result.riskScore > 0 && (
+          <p className={`text-xs font-bold font-mono ${isApprove ? 'text-[var(--brand-green)]' : isReject ? 'text-red-600' : 'text-orange-600'}`}>
+            Risk score: {Math.round(result.riskScore * 100)}%
+          </p>
+        )}
+        <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">{subtitle}</p>
+        <button
+          id="ai-result-done"
+          onClick={onClose}
+          className={`w-full py-3 rounded-2xl text-white font-bold text-sm transition ${accent} hover:opacity-90`}
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── AI spinner dialog ────────────────────────────────────────────────────────
+
+function AiSpinner() {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
+      <div className="bg-white rounded-3xl p-8 w-full max-w-xs shadow-2xl flex flex-col items-center gap-4">
+        <svg className="animate-spin h-10 w-10 text-[var(--brand-green)]" viewBox="0 0 24 24" fill="none">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+        <p className="text-base font-bold text-gray-800">Evaluating your application…</p>
+        <p className="text-sm text-gray-400 text-center">Our AI is reviewing your documents. This takes a few seconds.</p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Apply Page ───────────────────────────────────────────────────────────────
 
 export default function ApplyPage() {
+  const { profile, studentProfile, isLoading: authLoading } = useAuth()
+  const router = useRouter()
+
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [form, setForm] = useState<ApplyFormState>(INITIAL_FORM)
+  const [availableSavings, setAvailableSavings] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [aiReviewing, setAiReviewing] = useState(false)
+  const [aiResult, setAiResult] = useState<AiResult | null>(null)
+
+  // Lenders cannot apply for loans — redirect to the lender hub.
+  // useEffect used instead of an early return to avoid Rules-of-Hooks violation
+  // (all useState calls above must run unconditionally).
+  const isLender = profile?.is_lender ?? false
+  useEffect(() => {
+    if (!authLoading && isLender) {
+      router.replace('/lender/fund-loan')
+    }
+  }, [authLoading, isLender, router])
+
+  // Fetch wallet balance (mirrors _fetchWalletBalance)
+  const fetchWalletBalance = useCallback(async () => {
+    if (!profile?.id) return
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('wallet')
+      .select('current_savings, held_amount')
+      .eq('user_id', profile.id)
+      .maybeSingle()
+    const savings = Number(data?.current_savings ?? 0)
+    const held = Number(data?.held_amount ?? 0)
+    setAvailableSavings(Math.max(savings - held, 0))
+  }, [profile?.id])
+
+  useEffect(() => {
+    fetchWalletBalance()
+  }, [fetchWalletBalance])
+
+  // Render nothing while redirecting lenders
+  if (!authLoading && isLender) return null
+
+  // ── Submit handler ─────────────────────────────────────────────────────────
+  const handleSubmit = async (
+    schoolIdFile: File | null,
+    assessmentFile: File | null,
+  ) => {
+    if (!profile || !studentProfile) return
+    setIsSubmitting(true)
+
+    const supabase = createClient()
+
+    try {
+      // 1. Insert loan
+      const { data: loanRow, error: loanErr } = await supabase
+        .from('loans')
+        .insert({
+          user_id: profile.id,
+          amount: form.amount,
+          purpose: form.purpose.trim(),
+          loan_type: form.loanType,
+          status: 'pending',
+          ai_evaluation: 'pending',
+          collateral_pool: form.collateralPool,
+        })
+        .select('id')
+        .single()
+      if (loanErr || !loanRow) throw new Error(loanErr?.message ?? 'Loan insert failed')
+      const loanId = loanRow.id as string
+
+      // 2. Insert self pledge
+      await supabase.from('loan_pledges').insert({
+        loan_id: loanId,
+        pledger_id: profile.id,
+        borrower_self: true,
+        amount: form.selfPledge,
+        status: 'accepted',
+      })
+
+      // 3. Lock self pledge
+      await supabase.rpc('lock_self_pledge', { p_loan_id: loanId, p_user_id: profile.id })
+
+      // 4. Upload documents
+      const uploadDoc = async (file: File, folder: string) => {
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
+        const name = `${folder}_${loanId}_${Date.now()}.${ext}`
+        const bytes = await file.arrayBuffer()
+        const { error } = await supabase.storage
+          .from('documents')
+          .upload(name, bytes, { contentType: file.type, upsert: true })
+        if (!error) {
+          const url = supabase.storage.from('documents').getPublicUrl(name).data.publicUrl
+          await supabase.from('documents').insert({
+            user_id: profile.id,
+            loan_id: loanId,
+            file_url: url,
+            uploaded_at: new Date().toISOString(),
+          })
+          return url
+        }
+        return null
+      }
+
+      const schoolIdUrl = schoolIdFile ? await uploadDoc(schoolIdFile, 'school_id') : null
+      const assessmentUrl = assessmentFile ? await uploadDoc(assessmentFile, 'assessment') : null
+
+      // 5. AI evaluation
+      setIsSubmitting(false)
+      setAiReviewing(true)
+
+      let aiDecision: AiResult = { decision: 'manual_review', reason: '', riskScore: 0 }
+      try {
+        aiDecision = await callGeminiEvaluate({
+          type: 'loan',
+          studentName: `${profile.first_name} ${profile.last_name}`,
+          studentId: studentProfile.student_id,
+          assessmentBalance: form.amount,
+          schoolIdUrl: schoolIdUrl ?? undefined,
+          assessmentUrl: assessmentUrl ?? undefined,
+        })
+      } catch {
+        aiDecision = { decision: 'manual_review', reason: 'AI unavailable — flagged for manual review.', riskScore: 0 }
+      }
+
+      // 6. Persist AI result
+      await supabase.rpc('set_loan_ai_evaluation', {
+        p_loan_id: loanId,
+        p_evaluation: aiDecision.decision,
+      })
+
+      setAiReviewing(false)
+      setAiResult(aiDecision)
+    } catch (e) {
+      setIsSubmitting(false)
+      setAiReviewing(false)
+      alert(`Submission failed: ${(e as Error).message}`)
+    }
+  }
+
+  const handleResultClose = () => {
+    setAiResult(null)
+    setStep(1)
+    setForm(INITIAL_FORM)
+    fetchWalletBalance()
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-      <div className="w-20 h-20 rounded-full bg-[var(--brand-green-50)] flex items-center justify-center mb-5">
-        <FileTextIcon size={36} className="text-[var(--brand-green)]" />
+    <>
+      {aiReviewing && <AiSpinner />}
+      {aiResult && <AiResultDialog result={aiResult} onClose={handleResultClose} />}
+
+      <div className="min-h-screen">
+        {/* Green header */}
+        <div className="bg-[var(--brand-green)] px-6 pt-12 pb-8">
+          <h1 className="text-white text-2xl font-bold mb-4">Loan Application</h1>
+          <StepBar current={step} />
+        </div>
+
+        {/* Step content */}
+        <div className="px-6 py-6 max-w-2xl mx-auto">
+          {step === 1 && (
+            <Step1LoanType
+              form={form}
+              onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
+              onNext={() => setStep(2)}
+              profile={profile}
+              studentProfile={studentProfile}
+            />
+          )}
+          {step === 2 && (
+            <Step2LoanDetails
+              form={form}
+              onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
+              onNext={() => setStep(3)}
+              onBack={() => setStep(1)}
+              availableSavings={availableSavings}
+            />
+          )}
+          {step === 3 && (
+            <Step3Documents
+              form={form}
+              onBack={() => setStep(2)}
+              onSubmit={handleSubmit}
+              isSubmitting={isSubmitting}
+            />
+          )}
+        </div>
       </div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Loan Application</h1>
-      <p className="text-sm text-gray-500 max-w-xs mb-6">
-        The multi-step loan application form is coming soon. You can track existing loans in the Track tab.
-      </p>
-      <Link
-        href="/loans"
-        className="px-6 py-3 rounded-xl bg-[var(--brand-green)] text-white font-bold text-sm hover:bg-[var(--brand-green-dark)] transition"
-      >
-        Track My Loans
-      </Link>
-    </div>
+    </>
   )
 }

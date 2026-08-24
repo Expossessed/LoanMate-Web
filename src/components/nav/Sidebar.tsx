@@ -4,11 +4,11 @@
  * Sidebar — Desktop navigation (md+ only)
  *
  * Visible only on md+ screens (hidden on mobile — BottomNav handles mobile).
- * Mirrors Flutter DashboardScreen's tab structure.
  *
- * Student nav items:  Home | Apply | Track | E-Wallet | Profile
- * Lender extra items: Provide Capital | Track Deposits
- * Admin items:        Loans | Deposits | Users
+ * Student nav:  Home | Apply | Track Loans | E-Wallet | Profile | Settings
+ * Lender nav:   Home | Fund a Loan | Provide Capital | Track Deposits |
+ *               Withdraw | E-Wallet | Profile | Settings
+ * Admin items:  Loans | Deposits | Users
  */
 
 import Link from 'next/link'
@@ -19,12 +19,14 @@ import {
   TrendingUpIcon,
   WalletIcon,
   UserIcon,
-  PlusCircleIcon,
   BarChart2Icon,
   ClipboardListIcon,
   UsersIcon,
   ShieldIcon,
   LogOutIcon,
+  ArrowDownCircleIcon,
+  SettingsIcon,
+  BanknoteIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -35,23 +37,31 @@ interface NavItem {
   Icon: React.ElementType
 }
 
+/** Student-only items — lenders do NOT see Apply, Track Loans */
 const studentItems: NavItem[] = [
-  { href: '/home', label: 'Home', Icon: HomeIcon },
-  { href: '/apply', label: 'Apply', Icon: FileTextIcon },
-  { href: '/loans', label: 'Track Loans', Icon: TrendingUpIcon },
-  { href: '/wallet', label: 'E-Wallet', Icon: WalletIcon },
-  { href: '/profile', label: 'Profile', Icon: UserIcon },
+  { href: '/home',     label: 'Home',        Icon: HomeIcon },
+  { href: '/apply',    label: 'Apply',        Icon: FileTextIcon },
+  { href: '/loans',    label: 'Track Loans',  Icon: TrendingUpIcon },
+  { href: '/wallet',   label: 'E-Wallet',     Icon: WalletIcon },
+  { href: '/profile',  label: 'Profile',      Icon: UserIcon },
+  { href: '/settings', label: 'Settings',     Icon: SettingsIcon },
 ]
 
-const lenderItems: NavItem[] = [
-  { href: '/lender/provide-capital', label: 'Provide Capital', Icon: PlusCircleIcon },
-  { href: '/lender/track-deposits', label: 'Track Deposits', Icon: BarChart2Icon },
+/** Lender-only main nav — replaces the student nav entirely for is_lender accounts */
+const lenderMainItems: NavItem[] = [
+  { href: '/home',                  label: 'Home',           Icon: HomeIcon },
+  { href: '/lender/fund-loan',      label: 'Fund a Loan',    Icon: BanknoteIcon },
+  { href: '/lender/track-deposits', label: 'Track Funded Loans', Icon: BarChart2Icon },
+  { href: '/lender/withdraw',       label: 'Withdraw',       Icon: ArrowDownCircleIcon },
+  { href: '/wallet',                label: 'E-Wallet',       Icon: WalletIcon },
+  { href: '/profile',               label: 'Profile',        Icon: UserIcon },
+  { href: '/settings',              label: 'Settings',       Icon: SettingsIcon },
 ]
 
 const adminItems: NavItem[] = [
-  { href: '/admin/loans', label: 'Loans', Icon: ClipboardListIcon },
+  { href: '/admin/loans',    label: 'Loans',    Icon: ClipboardListIcon },
   { href: '/admin/deposits', label: 'Deposits', Icon: BarChart2Icon },
-  { href: '/admin/users', label: 'Users', Icon: UsersIcon },
+  { href: '/admin/users',    label: 'Users',    Icon: UsersIcon },
 ]
 
 interface SidebarProps {
@@ -64,8 +74,8 @@ export function Sidebar({ role, isLender }: SidebarProps) {
   const router = useRouter()
 
   const isAdmin = role === 'admin' || role === 'finance_officer'
-  const mainItems = isAdmin ? adminItems : studentItems
-  const extraItems = !isAdmin && isLender ? lenderItems : []
+  // Lenders get their own dedicated nav; students get the student nav
+  const mainItems = isAdmin ? adminItems : isLender ? lenderMainItems : studentItems
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -104,33 +114,6 @@ export function Sidebar({ role, isLender }: SidebarProps) {
             </Link>
           )
         })}
-
-        {/* Lender section */}
-        {extraItems.length > 0 && (
-          <>
-            <div className="pt-3 pb-1 px-3">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Lender</p>
-            </div>
-            {extraItems.map(({ href, label, Icon }) => {
-              const active = pathname === href
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={[
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
-                    active
-                      ? 'bg-[var(--brand-green)] text-white'
-                      : 'text-gray-600 hover:bg-[var(--brand-green-50)] hover:text-[var(--brand-green)]',
-                  ].join(' ')}
-                >
-                  <Icon size={18} />
-                  {label}
-                </Link>
-              )
-            })}
-          </>
-        )}
       </nav>
 
       {/* Sign out */}

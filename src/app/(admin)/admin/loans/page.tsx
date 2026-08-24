@@ -31,12 +31,20 @@ interface PendingLoan {
   status: string
   ai_evaluation: string
   created_at: string
+  /**
+   * User fields returned directly by the `admin_get_pending_loans` RPC.
+   * `student_id`, `course`, and `year_level` are joined from `student_profiles`
+   * inside that SECURITY DEFINER function.
+   */
   _user: {
     first_name?: string
     last_name?: string
+    /** From student_profiles.student_id */
     student_id?: string
+    /** From student_profiles.course */
     course?: string
-    year_level?: string
+    /** From student_profiles.year_level */
+    year_level?: string | number
   }
 }
 
@@ -45,30 +53,30 @@ interface PendingLoan {
 async function fetchPendingLoans(): Promise<PendingLoan[]> {
   const supabase = createClient()
 
-  const { data: rows = [] } = await supabase
-    .from('loans')
-    .select('id, amount, purpose, status, ai_evaluation, created_at, user_id')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true })
+  // Single SECURITY DEFINER RPC — joins loans + users + student_profiles
+  // and bypasses any RLS that might reference dropped users columns.
+  const { data, error } = await supabase.rpc('admin_get_pending_loans')
 
-  if (!rows.length) return []
-
-  const userIds = [...new Set(rows.map((r) => String(r.user_id)))]
-  let userMap: Record<string, Record<string, unknown>> = {}
-
-  try {
-    const userRows = await supabase.rpc('admin_get_users_by_ids', { p_user_ids: userIds })
-    for (const u of userRows.data ?? []) {
-      userMap[String(u.id)] = u
-    }
-  } catch (e) {
-    console.error('admin_get_users_by_ids error:', e)
+  if (error) {
+    console.error('[fetchPendingLoans] RPC error:', error)
+    return []
   }
 
-  return rows.map((loan) => ({
-    ...loan,
-    amount: Number(loan.amount ?? 0),
-    _user: (userMap[String(loan.user_id)] ?? {}) as PendingLoan['_user'],
+  return (data ?? []).map((row: Record<string, unknown>) => ({
+    id: String(row.id ?? ''),
+    user_id: String(row.user_id ?? ''),
+    amount: Number(row.amount ?? 0),
+    purpose: String(row.purpose ?? ''),
+    status: String(row.status ?? 'pending'),
+    ai_evaluation: String(row.ai_evaluation ?? 'pending'),
+    created_at: String(row.created_at ?? ''),
+    _user: {
+      first_name: row.first_name != null ? String(row.first_name) : undefined,
+      last_name: row.last_name != null ? String(row.last_name) : undefined,
+      student_id: row.student_id != null ? String(row.student_id) : undefined,
+      course: row.course != null ? String(row.course) : undefined,
+      year_level: row.year_level != null ? row.year_level : undefined,
+    },
   }))
 }
 

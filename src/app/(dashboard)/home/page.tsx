@@ -210,7 +210,7 @@ function StatusBadge({ status }: { status: string }) {
 // ─── Home Page ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const { profile, isLoading: authLoading } = useAuth()
+  const { profile, studentProfile, isLoading: authLoading } = useAuth()
   const userId = profile?.id
 
   const { data, isLoading } = useQuery({
@@ -263,7 +263,7 @@ export default function HomePage() {
             {loading ? (
               <Skeleton className="w-24 h-4 mt-1" />
             ) : (
-              <p className="text-white/60 text-xs mt-0.5">{profile?.student_id}</p>
+              <p className="text-white/60 text-xs mt-0.5">{studentProfile?.student_id}</p>
             )}
           </div>
           <button
