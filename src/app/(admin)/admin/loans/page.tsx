@@ -123,7 +123,13 @@ async function approveLoan(loan: PendingLoan) {
 async function denyLoan(loanId: string) {
   const supabase = createClient()
   await supabase.from('loans').update({ status: 'denied' }).eq('id', loanId)
-  await supabase.rpc('release_loan_pledges', { p_loan_id: loanId }).catch(() => {})
+  const { error } = await supabase.rpc('release_loan_pledges', {
+    p_loan_id: loanId,
+  })
+
+if (error) {
+  console.error('Failed to release loan pledges:', error)
+}
 }
 
 // ─── AI badge colour ──────────────────────────────────────────────────────────
