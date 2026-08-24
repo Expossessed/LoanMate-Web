@@ -100,7 +100,7 @@ async function approveLoan(loan: PendingLoan) {
     .select('remaining_balance')
     .eq('user_id', userId)
 
-  const currentTotal = activeRows.reduce((s, r) => s + Number(r.remaining_balance ?? 0), 0)
+  const currentTotal = (activeRows || []).reduce((s, r) => s + Number(r.remaining_balance ?? 0), 0)
   if (currentTotal + totalRepayment > MAX_ACTIVE_TOTAL) {
     throw new Error(
       `Cannot approve: total active balance would exceed ₱10,000 ` +
