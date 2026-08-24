@@ -63,8 +63,8 @@ function AiResultDialog({
   result: AiResult
   onClose: () => void
 }) {
-  const isApprove = result.decision === 'approve'
-  const isReject = result.decision === 'reject'
+  const isApprove = result.recommendation === 'approve'
+  const isReject = result.recommendation === 'reject'
 
   const title = isApprove
     ? '✅ Application Pre-Approved'
@@ -75,8 +75,8 @@ function AiResultDialog({
   const subtitle = isApprove
     ? 'Your loan application has been pre-approved by our AI system and will be reviewed by an admin.'
     : isReject
-    ? `Your application was not approved at this time. ${result.reason ?? ''}`
-    : `Your application has been submitted for manual review. ${result.reason ?? ''}`
+    ? `Your application was not approved at this time. ${result.reasoning ?? ''}`
+    : `Your application has been submitted for manual review. ${result.reasoning ?? ''}`
 
   const accent = isApprove
     ? 'bg-[var(--brand-green)]'
@@ -185,10 +185,9 @@ export default function ApplyPage() {
   if (!authLoading && isLender) return null
 
   // ── Submit handler ─────────────────────────────────────────────────────────
-  const handleSubmit = async (
-    schoolIdFile: File | null,
-    assessmentFile: File | null,
-  ) => {
+  const handleSubmit = async () => {
+    const schoolIdFile = form.schoolIdFile
+    const assessmentFile = form.assessmentFile
     if (!profile || !studentProfile) return
     setIsSubmitting(true)
 
@@ -200,12 +199,12 @@ export default function ApplyPage() {
         .from('loans')
         .insert({
           user_id: profile.id,
-          amount: form.amount,
+          amount: Number(form.amount),
           purpose: form.purpose.trim(),
           loan_type: form.loanType,
           status: 'pending',
           ai_evaluation: 'pending',
-          collateral_pool: form.collateralPool,
+          collateral_pool: form.buddyPledges.map(p => p.studentId),
         })
         .select('id')
         .single()
@@ -217,7 +216,7 @@ export default function ApplyPage() {
         loan_id: loanId,
         pledger_id: profile.id,
         borrower_self: true,
-        amount: form.selfPledge,
+        amount: form.selfPledgeAmount,
         status: 'accepted',
       })
 
@@ -252,24 +251,28 @@ export default function ApplyPage() {
       setIsSubmitting(false)
       setAiReviewing(true)
 
-      let aiDecision: AiResult = { decision: 'manual_review', reason: '', riskScore: 0 }
+      let aiDecision: AiResult = { recommendation: 'manual_review', reasoning: '', riskScore: 0 }
       try {
+        const files: { file: File; label: string }[] = []
+        if (schoolIdFile) files.push({ file: schoolIdFile, label: 'school_id' })
+        if (assessmentFile) files.push({ file: assessmentFile, label: 'assessment' })
+
         aiDecision = await callGeminiEvaluate({
-          type: 'loan',
+          files,
           studentName: `${profile.first_name} ${profile.last_name}`,
           studentId: studentProfile.student_id,
-          assessmentBalance: form.amount,
-          schoolIdUrl: schoolIdUrl ?? undefined,
-          assessmentUrl: assessmentUrl ?? undefined,
+          requestedAmount: Number(form.amount),
+          context: 'loan',
         })
-      } catch {
-        aiDecision = { decision: 'manual_review', reason: 'AI unavailable — flagged for manual review.', riskScore: 0 }
+      } catch (err) {
+        console.warn('[AI Evaluation Error]', err)
+        aiDecision = { recommendation: 'manual_review', reasoning: 'AI unavailable — flagged for manual review.', riskScore: 0 }
       }
 
       // 6. Persist AI result
       await supabase.rpc('set_loan_ai_evaluation', {
         p_loan_id: loanId,
-        p_evaluation: aiDecision.decision,
+        p_evaluation: aiDecision.recommendation,
       })
 
       setAiReviewing(false)
@@ -319,11 +322,13 @@ export default function ApplyPage() {
               onNext={() => setStep(3)}
               onBack={() => setStep(1)}
               availableSavings={availableSavings}
+              onRefreshSavings={fetchWalletBalance}
             />
           )}
           {step === 3 && (
             <Step3Documents
               form={form}
+              onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
               onBack={() => setStep(2)}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting}
