@@ -1,16 +1,5 @@
 'use client'
 
-/**
- * Admin Loans Review Page — migrated from Flutter AdminLoanReviewTab
- *
- * Key business rules (preserved exactly):
- * 1. Fetch pending loans from `loans` table
- * 2. Fetch applicant profiles via `admin_get_users_by_ids` RPC (SECURITY DEFINER)
- * 3. Approve → computes 3% p.a. interest over 6 months → inserts active_loans row
- *    → guards against active loan total > ₱10,000
- * 4. Deny → updates status = 'denied' → calls release_loan_pledges RPC
- */
-
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -21,7 +10,6 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, getStatusColor } from '@/lib/types'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface PendingLoan {
   id: string
@@ -31,19 +19,12 @@ interface PendingLoan {
   status: string
   ai_evaluation: string
   created_at: string
-  /**
-   * User fields returned directly by the `admin_get_pending_loans` RPC.
-   * `student_id`, `course`, and `year_level` are joined from `student_profiles`
-   * inside that SECURITY DEFINER function.
-   */
+ 
   _user: {
     first_name?: string
     last_name?: string
-    /** From student_profiles.student_id */
     student_id?: string
-    /** From student_profiles.course */
     course?: string
-    /** From student_profiles.year_level */
     year_level?: string | number
   }
 }

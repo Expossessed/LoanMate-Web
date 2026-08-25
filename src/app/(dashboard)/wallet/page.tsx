@@ -1,19 +1,5 @@
 'use client'
 
-/**
- * E-Wallet Page — migrated from Flutter EWalletTab
- *
- * RPCs used (same names as Flutter):
- *   apply_monthly_savings_deduction(p_user_id)  → 'ok' | 'already_deducted_this_month' | 'insufficient_balance'
- *   add_to_savings(p_user_id, p_amount)          → 'ok' | 'insufficient_balance' | 'invalid_amount'
- *   release_loan_pledges(p_loan_id)              → called on full loan payoff
- *
- * Business rules preserved:
- * - Mandatory ₱500 monthly savings deduction (kMonthlySavingsAmount)
- * - availableSavings = currentSavings - heldAmount (held = pledged collateral)
- * - Pay loan: capped at remainingLoanBalance; on full payoff → release_loan_pledges RPC
- * - Top Up / Withdraw: direct wallet.balance UPDATE + transaction INSERT
- */
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -30,7 +16,7 @@ import { useAuth } from '@/hooks/useAuth'
 
 const MONTHLY_SAVINGS = 500
 
-// ─── Data fetcher ─────────────────────────────────────────────────────────────
+
 
 async function fetchWalletData(userId: string) {
   const supabase = createClient()
@@ -82,7 +68,7 @@ async function fetchWalletData(userId: string) {
   }
 }
 
-// ─── Amount Dialog ────────────────────────────────────────────────────────────
+
 
 function AmountDialog({
   title, subtitle, confirmLabel, confirmClass,
@@ -125,7 +111,7 @@ function AmountDialog({
   )
 }
 
-// ─── Wallet Page ──────────────────────────────────────────────────────────────
+
 
 export default function WalletPage() {
   const { profile } = useAuth()
@@ -144,7 +130,7 @@ export default function WalletPage() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['wallet', userId] })
 
-  // ── Top Up ─────────────────────────────────────────────────────────────────
+
   const topUpMutation = useMutation({
     mutationFn: async (amount: number) => {
       const supabase = createClient()
@@ -157,7 +143,7 @@ export default function WalletPage() {
     onError: (e: Error) => toast.error(`Top-up failed: ${e.message}`),
   })
 
-  // ── Withdraw ───────────────────────────────────────────────────────────────
+
   const withdrawMutation = useMutation({
     mutationFn: async (amount: number) => {
       if ((data?.walletBalance ?? 0) < amount) throw new Error('Insufficient balance.')
@@ -171,7 +157,7 @@ export default function WalletPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  // ── Pay Loan ───────────────────────────────────────────────────────────────
+
   const payLoanMutation = useMutation({
     mutationFn: async (amount: number) => {
       const supabase = createClient()
@@ -210,7 +196,7 @@ export default function WalletPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  // ── Add to Savings ─────────────────────────────────────────────────────────
+
   const savingsMutation = useMutation({
     mutationFn: async (amount: number) => {
       const supabase = createClient()
@@ -224,7 +210,7 @@ export default function WalletPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  // ── Monthly Sweep ──────────────────────────────────────────────────────────
+
   const sweepMutation = useMutation({
     mutationFn: async () => {
       const supabase = createClient()
@@ -278,7 +264,7 @@ export default function WalletPage() {
       )}
 
       <div className="min-h-screen">
-        {/* ── Green header ──────────────────────────────────────────── */}
+        {/* green header*/}
         <div className="bg-[var(--brand-green)] px-6 pt-12 pb-8 rounded-br-[60px]">
           <div className="flex items-center gap-2 mb-2">
             <WalletIcon size={18} className="text-white/70" />
@@ -316,7 +302,7 @@ export default function WalletPage() {
             </div>
           )}
 
-          {/* Remaining loan card — students only */}
+          {/* Remaining loan card (student only)*/}
           {!isLender && (data?.totalRemaining ?? 0) > 0 && (
             <div className="bg-white rounded-2xl p-5 shadow-sm border border-red-100">
               <div className="flex items-center justify-between">
@@ -343,7 +329,7 @@ export default function WalletPage() {
             </div>
           )}
 
-          {/* Savings Goal card — students only; lenders cannot add to savings */}
+          {/* Savings Goal card (student only) */}
           {!isLender && (
           <div className="bg-white rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-3">

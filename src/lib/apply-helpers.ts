@@ -1,7 +1,3 @@
-/**
- * Shared types and helpers for the Apply-for-Loan wizard.
- * Mirrors Flutter apply_tab.dart + AiService logic.
- */
 
 export type LoanType = 'Urgent' | 'Standard' | 'Flexible'
 
@@ -19,7 +15,7 @@ export interface ApplyFormState {
   mobile: string
 
   // Step 2
-  amount: string        // raw text
+  amount: string        
   repaymentTerm: 6 | 12 | 18
   purpose: string
   selfPledgeAmount: number
@@ -42,7 +38,6 @@ export const INITIAL_FORM: ApplyFormState = {
   assessmentFile: null,
 }
 
-// ─── Loan calculations (mirrors Flutter getters) ──────────────────────────────
 
 export function calcLoan(amount: number, term: 6 | 12 | 18) {
   const interest = amount * 0.03 * (term / 12)
@@ -57,7 +52,6 @@ export function fmt(v: number) {
   return `₱${v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
 }
 
-// ─── Local AI evaluation (mirrors Flutter _localEvaluate) ─────────────────────
 
 export interface AiResult {
   recommendation: 'approve' | 'reject' | 'manual_review'

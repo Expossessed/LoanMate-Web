@@ -1,16 +1,5 @@
 'use client'
 
-/**
- * Provide Capital — /lender/provide-capital
- *
- * Lenders contribute principal into the pooled lending fund for a fixed term.
- * This creates a new lender_deposits row. The lender receives their principal
- * back plus a fixed return at maturity — they do NOT see or select individual
- * student loans.
- *
- * Term options and fixed return rates are defined in TERM_OPTIONS below.
- * In production these would come from a system config table.
- */
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -29,9 +18,6 @@ import { formatCurrency } from '@/lib/types'
 import type { LenderProfile } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 
-// ─── Term configuration ───────────────────────────────────────────────────────
-
-/** Fixed return rates per term. Adjust to match the system's policy. */
 const TERM_OPTIONS = [
   { months: 3,  label: '3 Months',  rate: 0.03, rateLabel: '3% fixed return' },
   { months: 6,  label: '6 Months',  rate: 0.05, rateLabel: '5% fixed return' },
@@ -39,8 +25,6 @@ const TERM_OPTIONS = [
 ] as const
 
 type TermMonths = (typeof TERM_OPTIONS)[number]['months']
-
-// ─── Validation schema ────────────────────────────────────────────────────────
 
 function buildSchema(authorizedLimit: number, alreadyContributed: number) {
   const available = Math.max(0, authorizedLimit - alreadyContributed)
@@ -58,8 +42,6 @@ function buildSchema(authorizedLimit: number, alreadyContributed: number) {
 
 type FormValues = z.infer<ReturnType<typeof buildSchema>>
 
-// ─── Data fetchers ────────────────────────────────────────────────────────────
-
 async function fetchLenderProfile(userId: string): Promise<LenderProfile | null> {
   const supabase = createClient()
   const { data } = await supabase
@@ -70,7 +52,6 @@ async function fetchLenderProfile(userId: string): Promise<LenderProfile | null>
   return data as LenderProfile | null
 }
 
-// ─── Mutation ─────────────────────────────────────────────────────────────────
 
 async function submitDeposit(
   userId: string,
@@ -102,8 +83,7 @@ async function submitDeposit(
   if (error) throw new Error(error.message)
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
+//helpers
 function addMonths(date: Date, months: number): Date {
   const d = new Date(date)
   d.setMonth(d.getMonth() + months)
@@ -114,7 +94,6 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProvideCapitalPage() {
   const { profile } = useAuth()
@@ -174,14 +153,14 @@ export default function ProvideCapitalPage() {
 
   return (
     <div className="min-h-screen">
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* header */}
       <div className="bg-[var(--brand-green)] px-6 pt-12 pb-8">
         <p className="text-white/70 text-xs font-semibold tracking-widest uppercase mb-1">
           Lender Portal
         </p>
         <h1 className="text-white text-3xl font-bold mb-6">Provide Capital</h1>
 
-        {/* Limit stat cards */}
+        {/* Limit status cards */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white/15 rounded-2xl p-4">
             <p className="text-white/70 text-xs mb-1">Authorized Limit</p>
@@ -204,10 +183,10 @@ export default function ProvideCapitalPage() {
         </div>
       </div>
 
-      {/* ── Body ────────────────────────────────────────────────── */}
+      {/* body */}
       <div className="px-6 py-6 max-w-2xl mx-auto space-y-5">
 
-        {/* How it works banner */}
+        {/* guide message */}
         <div className="flex gap-3 p-4 rounded-2xl bg-blue-50 border border-blue-200">
           <InfoIcon size={18} className="text-blue-600 shrink-0 mt-0.5" />
           <p className="text-sm text-blue-800 leading-relaxed">
@@ -217,12 +196,12 @@ export default function ProvideCapitalPage() {
           </p>
         </div>
 
-        {/* ── Form ────────────────────────────────────────────── */}
+        {/* Form */}
         <form
           onSubmit={handleSubmit((v) => mutation.mutate(v)) as any}
           className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6"
         >
-          {/* Principal input */}
+          {/* principal input */}
           <div>
             <label
               htmlFor="principal"
@@ -251,7 +230,7 @@ export default function ProvideCapitalPage() {
             </p>
           </div>
 
-          {/* Term selection */}
+          {/* term selection */}
           <div>
             <p className="text-xs font-extrabold tracking-widest text-gray-500 uppercase mb-3">
               Choose Term *
@@ -295,7 +274,7 @@ export default function ProvideCapitalPage() {
             )}
           </div>
 
-          {/* Preview */}
+          {/* preview */}
           {selectedTerm && watchPrincipal > 0 && (
             <div className="bg-[var(--brand-green-50)] rounded-2xl p-5 space-y-3">
               <p className="text-xs font-extrabold tracking-widest text-gray-500 uppercase">

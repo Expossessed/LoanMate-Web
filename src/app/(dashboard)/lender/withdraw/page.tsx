@@ -1,16 +1,5 @@
 'use client'
 
-/**
- * Request Withdrawal — /lender/withdraw
- *
- * Lender selects an active or matured deposit and submits a withdrawal request.
- * - Matured deposits: no penalty, full maturity_amount returned.
- * - Active deposits (early): system applies a penalty. Penalty is 10% of
- *   expected_return (returned principal stays intact). Adjust EARLY_PENALTY_RATE
- *   to match the system's policy.
- *
- * Creates a lender_withdrawals row with status = 'pending' for admin processing.
- */
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -31,16 +20,10 @@ import type { LenderDeposit } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 import Link from 'next/link'
 
-// ─── Policy ───────────────────────────────────────────────────────────────────
 
-/**
- * Penalty rate applied to the expected_return on early withdrawal.
- * e.g. 0.5 → lender forfeits 50% of their expected return (principal intact).
- * Adjust to match system policy. In production, this would come from the DB.
- */
 const EARLY_PENALTY_RATE = 0.5
 
-// ─── Zod schema ───────────────────────────────────────────────────────────────
+
 
 const schema = z.object({
   deposit_id: z.string().min(1, 'Please select a deposit.'),
@@ -49,7 +32,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-// ─── Fetcher ──────────────────────────────────────────────────────────────────
+
 
 async function fetchWithdrawableDeposits(userId: string): Promise<LenderDeposit[]> {
   const supabase = createClient()
@@ -62,7 +45,7 @@ async function fetchWithdrawableDeposits(userId: string): Promise<LenderDeposit[
   return (data ?? []) as LenderDeposit[]
 }
 
-// ─── Mutation ─────────────────────────────────────────────────────────────────
+
 
 async function submitWithdrawal(
   userId: string,
@@ -76,7 +59,7 @@ async function submitWithdrawal(
   const penaltyAmount = isEarly
     ? Math.round(deposit.expected_return * EARLY_PENALTY_RATE * 100) / 100
     : 0
-  // Amount requested = full maturity_amount (what lender is entitled to)
+  // Amount requested = full maturity_amount (what the lender is entitled to)
   const amount = deposit.maturity_amount
   const netPayout = amount - penaltyAmount
 
@@ -94,7 +77,7 @@ async function submitWithdrawal(
   if (error) throw new Error(error.message)
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -103,7 +86,6 @@ function fmtDate(iso: string | null | undefined): string {
   })
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function WithdrawPage() {
   const { profile } = useAuth()
@@ -152,7 +134,7 @@ export default function WithdrawPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  // ── Success / empty states ───────────────────────────────────────────────
+
 
   if (!isLoading && deposits.length === 0) {
     return (
@@ -194,7 +176,7 @@ export default function WithdrawPage() {
           onSubmit={handleSubmit((v) => mutation.mutate(v))}
           className="space-y-5"
         >
-          {/* Deposit selector */}
+          {/* deposit selector */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
             <p className="text-xs font-extrabold tracking-widest text-gray-500 uppercase">
               Select Deposit *

@@ -1,22 +1,4 @@
-/**
- * Dashboard layout — Server Component
- *
- * Wraps all student/lender pages (home, loans, wallet, apply, profile).
- * Fetches the user's role server-side and passes it to the client-side
- * nav components.
- *
- * Layout structure:
- * ┌──────────────────────────────────────┐
- * │  Sidebar (hidden on mobile)          │
- * │  ┌────────────────────────────────┐  │
- * │  │  Page content (main)           │  │
- * │  └────────────────────────────────┘  │
- * │  BottomNav (mobile only)             │
- * └──────────────────────────────────────┘
- *
- * On mobile: full-width content + fixed bottom tab bar
- * On md+:    fixed left sidebar (w-64) + content with ml-64 offset
- */
+
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -34,7 +16,7 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Middleware already guards this, but double-check for safety
+
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase

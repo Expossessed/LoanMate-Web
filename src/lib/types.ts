@@ -284,10 +284,6 @@ export function getStatusColor(status: string): string {
   }
 }
 
-/**
- * Formats a number as Philippine Peso.
- * e.g.  formatCurrency(5000) → "₱5,000.00"
- */
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -296,10 +292,7 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
-/**
- * Converts a studentId into the fake email used for Supabase Auth.
- * Must match AuthService.toEmail() in Flutter exactly.
- */
+
 export function toEmail(studentId: string): string {
   return `${studentId}@loanmate.local`
 }

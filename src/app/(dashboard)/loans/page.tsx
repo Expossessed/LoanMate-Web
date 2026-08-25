@@ -1,21 +1,6 @@
 'use client'
 
-/**
- * Loans (Track) Page — migrated from Flutter LoanTab
- *
- * Sections (mirrors Flutter exactly):
- *  1. Green header card — total original / total remaining
- *  2. AI Evaluation badge — raw loans.ai_evaluation value
- *  3. Next Payment card — first pending repayment_schedule row
- *  4. Active Loans — from active_loans table (original_amount > 0)
- *  5. Pending Loans — loans with status = 'pending' not in active_loans
- *  6. Loan History — approved/rejected/paid, capped at 5
- *  7. Recent Activity — loan events + payment transactions, newest-first, max 8
- *
- * Responsive:
- *   Mobile:  single column, full-width cards
- *   Desktop: two-column grid for sections 4–7, full-width header/AI/next-payment
- */
+
 
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
@@ -34,7 +19,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, getStatusColor } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 
 interface LoanRow {
   purpose: string
@@ -74,7 +59,7 @@ interface LoansData {
   aiResult: string
 }
 
-// ─── Data fetcher (mirrors _loadData exactly) ─────────────────────────────────
+
 
 async function fetchLoansData(userId: string): Promise<LoansData> {
   const supabase = createClient()
@@ -82,7 +67,7 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
   const fmt = (n: number) => formatCurrency(n)
   const cap = (s: string) => s ? s[0].toUpperCase() + s.slice(1) : s
 
-  // 1. All loans
+  // All loans
   const loans = ((await supabase
     .from('loans')
     .select('id, amount, purpose, status, ai_evaluation, created_at')
@@ -93,7 +78,7 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
   const loanById: Record<string, Record<string, unknown>> = {}
   for (const l of loans) loanById[String(l.id)] = l
 
-  // 2. Active loans
+  // Active loans
   const activeRows = ((await supabase
     .from('active_loans')
     .select('id, loan_id, original_amount, remaining_balance, monthly_payment, start_date')
@@ -142,7 +127,7 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
     }
   }
 
-  // 3. Next repayment schedule
+  // Next repayment schedule
   let nextDueDate = '', nextDueAmount = ''
   if (loanIds.length > 0) {
     const schedules = ((await supabase
@@ -162,7 +147,7 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
     }
   }
 
-  // 4. Pending / history
+  // Pending / history
   const pendingLoans: HistoryRow[] = []
   for (const loan of loans) {
     const status = String(loan.status ?? '').toLowerCase()
@@ -181,7 +166,7 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
   }
   const historyTrimmed = loanHistory.slice(0, 5)
 
-  // 5. Recent activity
+  // Recent activity
   const activityIconMap: Record<string, string> = {
     approved: 'check', paid: 'payment', pending: 'send',
     rejected: 'cancel', denied: 'cancel', overdue: 'warning',
@@ -225,7 +210,7 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
   }
   recentActivity.sort((a, b) => b.sort_key.localeCompare(a.sort_key))
 
-  // 6. AI evaluation
+  // AI evaluation
   const rawAi = loans[0] ? String(loans[0].ai_evaluation ?? 'N/A') : 'N/A'
   const aiResult = cap(rawAi.replace('_', ' '))
 
@@ -242,7 +227,6 @@ async function fetchLoansData(userId: string): Promise<LoansData> {
   }
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-200 rounded-lg ${className}`} />
@@ -267,16 +251,13 @@ function ActivityItemIcon({ icon }: { icon: string }) {
   )
 }
 
-// ─── Loans Page ───────────────────────────────────────────────────────────────
+
 
 export default function LoansPage() {
   const { profile } = useAuth()
   const router = useRouter()
   const userId = profile?.id
 
-  // Lenders don't have personal loans — redirect to their deposit tracker.
-  // Using useEffect instead of an early return to avoid a Rules-of-Hooks violation
-  // (useQuery below must always run regardless of role).
   const isLender = profile?.is_lender ?? false
   useEffect(() => {
     if (profile && isLender) {
@@ -287,7 +268,7 @@ export default function LoansPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['loans', userId],
     queryFn: () => fetchLoansData(userId!),
-    enabled: !!userId && !isLender, // skip query entirely for lenders
+    enabled: !!userId && !isLender, 
   })
 
   const totalPaid = (data?.totalOriginalAmount ?? 0) - (data?.totalRemainingBalance ?? 0)
@@ -295,12 +276,11 @@ export default function LoansPage() {
     ? Math.min(totalPaid / data.totalOriginalAmount, 1)
     : 0
 
-  // While redirect is in flight, render nothing
   if (isLender) return null
 
   return (
     <div className="min-h-screen">
-      {/* ── Header ──────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="bg-[var(--brand-green)] px-6 pt-12 pb-8 rounded-br-[60px]">
         <h1 className="text-white text-2xl font-bold mb-6">Track Loans</h1>
         <div className="grid grid-cols-2 gap-3">
@@ -341,7 +321,7 @@ export default function LoansPage() {
         </div>
       </div>
 
-      {/* ── Body ────────────────────────────────────────────────────── */}
+      {/* Body */}
       <div className="px-6 py-6 space-y-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0 lg:items-start">
 
         {/* AI Evaluation */}

@@ -1,20 +1,6 @@
 'use client'
 
-/**
- * Home Page — migrated from Flutter HomeTab
- *
- * Data fetched (all parallel via Promise.all — mirrors Future.wait):
- *   - users profile  → name, studentId
- *   - wallet         → balance, savingsGoal, currentSavings, walletId
- *   - transactions   → recentActivity, monthlySavings, paymentHistory
- *   - loans          → loanStatus, activeLoan
- *   - active_loans   → aggregate total/remaining/monthly
- *   - repayment_schedule → nextPaymentDate
- *
- * Responsive layout:
- *   Mobile: single-column stacked cards
- *   Desktop (lg+): two-column grid for summary cards, full-width others
- */
+
 
 import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
@@ -33,7 +19,6 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 
-// ─── Data fetcher ─────────────────────────────────────────────────────────────
 
 interface HomeData {
   walletBalance: number
@@ -56,7 +41,6 @@ interface HomeData {
 async function fetchHomeData(userId: string): Promise<HomeData> {
   const supabase = createClient()
 
-  // ── Run all initial queries in parallel ───────────────────────────────────
   const [walletRes, loansRes] = await Promise.all([
     supabase.from('wallet').select('*').eq('user_id', userId).single(),
     supabase
@@ -70,7 +54,7 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
   const loans = loansRes.data ?? []
   const walletId = wallet?.id as string | undefined
 
-  // Determine basic loan status
+
   let loanStatus = 'No Loans'
   let activeLoan: Record<string, unknown> | null = null
   let activeLoanPurpose = ''
@@ -78,7 +62,7 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
   if (loans.length > 0) {
     const latest = loans[0]
     loanStatus = String(latest.status ?? 'No Loans')
-    // Find most recent approved/active loan for display
+    // most recent approved/active loan
     const found = loans.find((l) => {
       const s = String(l.status ?? '').toLowerCase()
       return s === 'approved' || s === 'active' || s === 'partial'
@@ -91,9 +75,9 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
 
   const loanIds = loans.map((l) => String(l.id))
 
-  // ── Secondary queries (depend on walletId / loanIds) ─────────────────────
+
   const secondaryQueries = await Promise.all([
-    // Recent transactions (exclude init rows)
+    // recent transac
     walletId
       ? supabase
           .from('transactions')
@@ -103,13 +87,13 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
           .limit(10)
       : Promise.resolve({ data: [] }),
 
-    // Active loans aggregate
+    // active loans
     supabase
       .from('active_loans')
       .select('original_amount, remaining_balance, monthly_payment')
       .eq('user_id', userId),
 
-    // Next pending repayment
+    // next payment
     loanIds.length > 0
       ? supabase
           .from('repayment_schedule')
@@ -126,14 +110,14 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
   const activeRows = (secondaryQueries[1].data ?? []) as Array<Record<string, unknown>>
   const schedules = (secondaryQueries[2].data ?? []) as Array<Record<string, unknown>>
 
-  // Filter recent transactions
+  // filter recent transactions
   const recentTransactions = allTxs
     .filter((tx) => tx.type !== 'init')
     .slice(0, 5)
 
   const paymentTransactions = allTxs.filter((tx) => tx.type === 'payment')
 
-  // Monthly savings (current month)
+  // monthly savings
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
@@ -145,7 +129,7 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
     .filter((tx) => tx.type === 'savings' || tx.type === 'auto_deduction')
     .reduce((sum, tx) => sum + Number(tx.amount ?? 0), 0)
 
-  // Aggregate active_loans (skip placeholder rows with original_amount === 0)
+  // active_loans
   let activeLoanTotal = 0, activeLoanRemaining = 0, totalMonthlyPayment = 0
   for (const row of activeRows) {
     const orig = Number(row.original_amount ?? 0)
@@ -184,7 +168,7 @@ async function fetchHomeData(userId: string): Promise<HomeData> {
   }
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+
 
 function Skeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse bg-gray-200 rounded-lg ${className ?? ''}`} />
@@ -207,7 +191,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-// ─── Home Page ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const { profile, studentProfile, isLoading: authLoading } = useAuth()
@@ -231,7 +214,7 @@ export default function HomePage() {
       ? Math.min(data.activeLoanPaid / data.activeLoanTotal, 1)
       : 0
 
-  // Savings star score (matches Flutter logic)
+  // savings star score
   const starScore =
     data && data.totalSavingsDeposited > 0
       ? data.totalSavingsDeposited < 5000
@@ -247,7 +230,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen">
-      {/* ── Green header ─────────────────────────────────────────────── */}
+
       <div className="bg-[var(--brand-green)] px-6 pt-12 pb-8 rounded-br-[60px]">
         {/* Greeting row */}
         <div className="flex items-center justify-between mb-8">
@@ -257,7 +240,7 @@ export default function HomePage() {
               <Skeleton className="w-36 h-7 mt-1" />
             ) : (
               <h1 className="text-white text-2xl font-bold tracking-tight">
-                {profile?.first_name ?? 'Student'} 👋
+                {profile?.first_name ?? 'Student'}
               </h1>
             )}
             {loading ? (
@@ -296,13 +279,12 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── Body ─────────────────────────────────────────────────────── */}
       <div className="px-6 py-6 space-y-6">
 
         {/* Active loan + Summary row */}
         <div className="lg:grid lg:grid-cols-3 lg:gap-4 space-y-4 lg:space-y-0">
 
-          {/* Active loan card — takes 2 cols on desktop */}
+          {/* Active loan card */}
           <div className="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-gray-900 text-lg">Active Loan</h2>
@@ -398,7 +380,7 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Savings + Score cards — stacked in 1 col on desktop */}
+          {/* Savings + Score cards */}
           <div className="space-y-4">
             {/* Savings card */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">

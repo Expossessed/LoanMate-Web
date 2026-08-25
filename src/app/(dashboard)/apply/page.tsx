@@ -1,21 +1,5 @@
 'use client'
 
-/**
- * Apply Page — multi-step loan application wizard.
- * Mirrors Flutter ApplyTab exactly:
- *   Step 1 → Loan type + personal details + mobile
- *   Step 2 → Amount + term + purpose + loan estimate + collateral pool
- *   Step 3 → Document upload + submit
- *
- * Submit flow (mirrors _handleSubmit):
- *   1. Insert into `loans`
- *   2. Insert `loan_pledges` (self + buddies)
- *   3. Call lock_self_pledge RPC
- *   4. Upload docs to Supabase Storage → insert into `documents`
- *   5. Gemini AI evaluation (server-side /api/ai-evaluate)
- *   6. Call set_loan_ai_evaluation RPC
- *   7. Show result dialog, reset form
- */
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -33,7 +17,7 @@ import Step1LoanType from '@/components/apply/Step1LoanType'
 import Step2LoanDetails from '@/components/apply/Step2LoanDetails'
 import Step3Documents from '@/components/apply/Step3Documents'
 
-// ─── Step progress indicator ──────────────────────────────────────────────────
+
 
 function StepBar({ current }: { current: 1 | 2 | 3 }) {
   return (
@@ -54,7 +38,7 @@ function StepBar({ current }: { current: 1 | 2 | 3 }) {
   )
 }
 
-// ─── AI Result dialog ─────────────────────────────────────────────────────────
+
 
 function AiResultDialog({
   result,
@@ -67,10 +51,10 @@ function AiResultDialog({
   const isReject = result.recommendation === 'reject'
 
   const title = isApprove
-    ? '✅ Application Pre-Approved'
+    ? 'Application Pre-Approved'
     : isReject
-    ? '❌ Application Rejected'
-    : '⏳ Pending Manual Review'
+    ? 'Application Rejected'
+    : 'Pending Manual Review'
 
   const subtitle = isApprove
     ? 'Your loan application has been pre-approved by our AI system and will be reviewed by an admin.'
@@ -123,7 +107,7 @@ function AiResultDialog({
   )
 }
 
-// ─── AI spinner dialog ────────────────────────────────────────────────────────
+
 
 function AiSpinner() {
   return (
@@ -140,7 +124,7 @@ function AiSpinner() {
   )
 }
 
-// ─── Apply Page ───────────────────────────────────────────────────────────────
+
 
 export default function ApplyPage() {
   const { profile, studentProfile, isLoading: authLoading } = useAuth()
@@ -153,9 +137,7 @@ export default function ApplyPage() {
   const [aiReviewing, setAiReviewing] = useState(false)
   const [aiResult, setAiResult] = useState<AiResult | null>(null)
 
-  // Lenders cannot apply for loans — redirect to the lender hub.
-  // useEffect used instead of an early return to avoid Rules-of-Hooks violation
-  // (all useState calls above must run unconditionally).
+
   const isLender = profile?.is_lender ?? false
   useEffect(() => {
     if (!authLoading && isLender) {
@@ -163,7 +145,7 @@ export default function ApplyPage() {
     }
   }, [authLoading, isLender, router])
 
-  // Fetch wallet balance (mirrors _fetchWalletBalance)
+
   const fetchWalletBalance = useCallback(async () => {
     if (!profile?.id) return
     const supabase = createClient()
@@ -181,10 +163,10 @@ export default function ApplyPage() {
     fetchWalletBalance()
   }, [fetchWalletBalance])
 
-  // Render nothing while redirecting lenders
+
   if (!authLoading && isLender) return null
 
-  // ── Submit handler ─────────────────────────────────────────────────────────
+  
   const handleSubmit = async () => {
     const schoolIdFile = form.schoolIdFile
     const assessmentFile = form.assessmentFile
@@ -194,7 +176,7 @@ export default function ApplyPage() {
     const supabase = createClient()
 
     try {
-      // 1. Insert loan
+      //Insert loan
       const { data: loanRow, error: loanErr } = await supabase
         .from('loans')
         .insert({
@@ -211,7 +193,7 @@ export default function ApplyPage() {
       if (loanErr || !loanRow) throw new Error(loanErr?.message ?? 'Loan insert failed')
       const loanId = loanRow.id as string
 
-      // 2. Insert self pledge
+      //self pledge
       await supabase.from('loan_pledges').insert({
         loan_id: loanId,
         pledger_id: profile.id,
@@ -220,10 +202,10 @@ export default function ApplyPage() {
         status: 'accepted',
       })
 
-      // 3. Lock self pledge
+      //Lock self pledge
       await supabase.rpc('lock_self_pledge', { p_loan_id: loanId, p_user_id: profile.id })
 
-      // 4. Upload documents
+      //Upload documents
       const uploadDoc = async (file: File, folder: string) => {
         const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg'
         const name = `${folder}_${loanId}_${Date.now()}.${ext}`
@@ -247,7 +229,7 @@ export default function ApplyPage() {
       const schoolIdUrl = schoolIdFile ? await uploadDoc(schoolIdFile, 'school_id') : null
       const assessmentUrl = assessmentFile ? await uploadDoc(assessmentFile, 'assessment') : null
 
-      // 5. AI evaluation
+      //AI evaluation
       setIsSubmitting(false)
       setAiReviewing(true)
 
@@ -266,10 +248,10 @@ export default function ApplyPage() {
         })
       } catch (err) {
         console.warn('[AI Evaluation Error]', err)
-        aiDecision = { recommendation: 'manual_review', reasoning: 'AI unavailable — flagged for manual review.', riskScore: 0 }
+        aiDecision = { recommendation: 'manual_review', reasoning: 'AI unavailable, flagged for manual review.', riskScore: 0 }
       }
 
-      // 6. Persist AI result
+      //AI result
       await supabase.rpc('set_loan_ai_evaluation', {
         p_loan_id: loanId,
         p_evaluation: aiDecision.recommendation,
@@ -291,20 +273,19 @@ export default function ApplyPage() {
     fetchWalletBalance()
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       {aiReviewing && <AiSpinner />}
       {aiResult && <AiResultDialog result={aiResult} onClose={handleResultClose} />}
 
       <div className="min-h-screen">
-        {/* Green header */}
+
         <div className="bg-[var(--brand-green)] px-6 pt-12 pb-8">
           <h1 className="text-white text-2xl font-bold mb-4">Loan Application</h1>
           <StepBar current={step} />
         </div>
 
-        {/* Step content */}
+        {/* loan application steps */}
         <div className="px-6 py-6 max-w-2xl mx-auto">
           {step === 1 && (
             <Step1LoanType

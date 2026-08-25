@@ -1,29 +1,5 @@
 'use client'
 
-/**
- * Login Page — migrated from Flutter LoginScreen
- *
- * Functional mapping from Dart → React:
- * ┌─────────────────────────────────────────────────────────────────┐
- * │ Flutter                      │ React / Next.js                  │
- * ├─────────────────────────────────────────────────────────────────┤
- * │ StatefulWidget                │ 'use client' page + useState     │
- * │ TextEditingController         │ React Hook Form (Controller)     │
- * │ AuthService.signIn()          │ useMutation (TanStack Query)     │
- * │ Navigator.pushReplacement()   │ router.replace()                 │
- * │ ScaffoldMessenger.showSnackBar│ toast() from sonner              │
- * │ Timer.periodic countdown      │ useEffect + setInterval          │
- * │ _buildAccountTypeToggle()     │ RoleToggle component (inline)    │
- * └─────────────────────────────────────────────────────────────────┘
- *
- * Business rules preserved:
- * 1. Email encoding: studentId → "{studentId}@loanmate.local" via toEmail()
- * 2. Pre-flight RPC: check_student_exists before attempting auth
- * 3. Lockout: tracked server-side in login_attempts table; UI shows countdown
- * 4. Role routing: admin/finance_officer → /admin/loans; others → /home
- * 5. The role toggle is UI-only — actual role comes from the DB after login
- */
-
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -46,7 +22,6 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { toEmail } from '@/lib/types'
 
-// ─── Zod validation schema ────────────────────────────────────────────────────
 
 const loginSchema = z.object({
   studentId: z.string().min(1, 'Please enter your ID.'),
@@ -55,17 +30,16 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>
 
-// ─── Constants (mirror auth_service.dart) ────────────────────────────────────
 
 const MAX_ATTEMPTS = 5
-const LOCKOUT_SECONDS = 300 // 5 minutes
+const LOCKOUT_SECONDS = 300
 
-// ─── Sign-in function (replaces AuthService.signIn) ──────────────────────────
+
 
 async function signIn(data: LoginForm): Promise<{ role: string }> {
   const supabase = createClient()
 
-  // Pre-flight: check if this student ID exists (non-fatal if RPC fails)
+
   try {
     const exists = await supabase.rpc('check_student_exists', {
       p_student_id: data.studentId,
@@ -75,7 +49,7 @@ async function signIn(data: LoginForm): Promise<{ role: string }> {
     }
   } catch (e) {
     if ((e as Error).message === 'NO_ACCOUNT') throw e
-    // Network/infra error — fall through to normal auth
+ 
   }
 
   // Check lockout status in login_attempts table
@@ -127,7 +101,7 @@ async function signIn(data: LoginForm): Promise<{ role: string }> {
     )
   }
 
-  // Success — clear attempts and fetch role
+  // Success, clears attempts and fetch role
   await supabase
     .from('login_attempts')
     .delete()
@@ -141,8 +115,6 @@ async function signIn(data: LoginForm): Promise<{ role: string }> {
 
   return { role: profile?.role ?? 'student' }
 }
-
-// ─── Role Toggle ──────────────────────────────────────────────────────────────
 
 type LoginRole = 'Student' | 'Lender' | 'Admin'
 
@@ -186,7 +158,6 @@ function RoleToggle({
   )
 }
 
-// ─── Lockout countdown helpers ────────────────────────────────────────────────
 
 function formatCountdown(secs: number): string {
   const m = Math.floor(secs / 60)
@@ -195,7 +166,7 @@ function formatCountdown(secs: number): string {
   return `Try again in ${s}s`
 }
 
-// ─── Login Page ───────────────────────────────────────────────────────────────
+
 
 export default function LoginPage() {
   const router = useRouter()
@@ -203,13 +174,11 @@ export default function LoginPage() {
   const [loginRole, setLoginRole] = useState<LoginRole>('Student')
   const [showPassword, setShowPassword] = useState(false)
 
-  // Lockout state
   const [lockedSeconds, setLockedSeconds] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const isLocked = lockedSeconds > 0
 
-  // Start a countdown timer
   const startLockout = (seconds: number) => {
     setLockedSeconds(seconds)
     if (timerRef.current) clearInterval(timerRef.current)
@@ -224,7 +193,6 @@ export default function LoginPage() {
     }, 1000)
   }
 
-  // Clean up timer on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
@@ -288,7 +256,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen lg:min-h-0 flex flex-col bg-white">
-      {/* ── Green header banner ──────────────────────────────────────────── */}
       <div
         className="
           px-8 pt-16 pb-10
@@ -296,7 +263,6 @@ export default function LoginPage() {
           rounded-br-[80px]
         "
       >
-        {/* Logo row */}
         <div className="flex items-center gap-3 mb-10">
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-[var(--brand-orange)]">
             <ShieldIcon size={18} className="text-white" />
@@ -304,7 +270,6 @@ export default function LoginPage() {
           <span className="text-white text-lg font-bold tracking-wide">LoanMate</span>
         </div>
 
-        {/* Headline */}
         <h1 className="text-white font-bold text-4xl leading-tight tracking-tight">
           Your money,
           <br />
@@ -315,13 +280,10 @@ export default function LoginPage() {
         </p>
       </div>
 
-      {/* ── Form section ─────────────────────────────────────────────────── */}
       <div className="flex-1 px-8 pt-8 pb-10 bg-white">
         <h2 className="text-2xl font-bold text-gray-900 tracking-tight mb-7">
           Log in to your account
         </h2>
-
-        {/* Lockout banner */}
         {isLocked && (
           <div className="mb-5 flex items-start gap-3 px-4 py-3 rounded-xl border border-red-200 bg-red-50">
             <LockIcon size={18} className="mt-0.5 shrink-0 text-red-600" />

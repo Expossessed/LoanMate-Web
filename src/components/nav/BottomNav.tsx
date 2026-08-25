@@ -1,14 +1,5 @@
 'use client'
 
-/**
- * BottomNav — Mobile navigation (hidden on md+)
- *
- * Student: HOME | APPLY    | TRACK    | WALLET | PROFILE
- * Lender:  HOME | FUND     | DEPOSITS | WALLET | PROFILE
- *
- * Settings is accessible via the sidebar on desktop and via the
- * Profile page link on mobile.
- */
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'

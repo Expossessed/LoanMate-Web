@@ -1,16 +1,5 @@
 'use client'
 
-/**
- * Account Settings — /settings
- *
- * Shared by all account types. Sections shown depend on role:
- *  - All users:    Personal Details (edit), Change Password
- *  - Lenders only: Lender Account info (read-only summary from lender_profiles)
- *
- * Updates personal details via a direct users table update (no RPC needed —
- * the user can only update their own row, enforced by RLS).
- * Password change uses supabase.auth.updateUser().
- */
 
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -32,7 +21,6 @@ import { formatCurrency } from '@/lib/types'
 import type { LenderProfile, StudentProfile } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 
-// ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const detailsSchema = z.object({
   first_name: z.string().min(1, 'First name is required.'),
@@ -60,7 +48,7 @@ const passwordSchema = z
   })
 type PasswordForm = z.infer<typeof passwordSchema>
 
-// ─── Fetcher ──────────────────────────────────────────────────────────────────
+
 
 async function fetchLenderProfile(userId: string): Promise<LenderProfile | null> {
   const { data } = await createClient()
@@ -71,7 +59,7 @@ async function fetchLenderProfile(userId: string): Promise<LenderProfile | null>
   return data as LenderProfile | null
 }
 
-// ─── Mutations ────────────────────────────────────────────────────────────────
+
 
 async function updateDetails(userId: string, values: DetailsForm) {
   const { error } = await createClient()
@@ -93,7 +81,7 @@ async function changePassword(values: PasswordForm) {
   if (error) throw new Error(error.message)
 }
 
-// ─── Accordion section ────────────────────────────────────────────────────────
+
 
 function Section({
   id,
@@ -139,7 +127,7 @@ function Section({
   )
 }
 
-// ─── Field wrapper ────────────────────────────────────────────────────────────
+
 
 function Field({
   label,
@@ -196,7 +184,7 @@ function TextInput({
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+
 
 export default function SettingsPage() {
   const { profile, studentProfile } = useAuth()
@@ -213,14 +201,14 @@ export default function SettingsPage() {
   const [showNewPw, setShowNewPw] = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
 
-  // Lender profile (only fetched when is_lender)
+  // lender profile (only fetched when is_lender)
   const { data: lenderProfile } = useQuery({
     queryKey: ['lender-profile', userId],
     queryFn: () => fetchLenderProfile(userId!),
     enabled: !!userId && isLender,
   })
 
-  // ── Personal Details form ──────────────────────────────────────────────
+  
   const detailsForm = useForm<DetailsForm>({
     resolver: zodResolver(detailsSchema),
     defaultValues: {
@@ -230,7 +218,7 @@ export default function SettingsPage() {
       contact_number: profile?.contact_number ?? '',
     },
   })
-  // Re-populate when profile loads
+  // repopulates when profile loads
   const { reset: resetDetails } = detailsForm
   const detailsMutation = useMutation({
     mutationFn: (v: DetailsForm) => updateDetails(userId!, v),
@@ -241,7 +229,7 @@ export default function SettingsPage() {
     onError: (e: Error) => toast.error(e.message),
   })
 
-  // ── Change Password form ───────────────────────────────────────────────
+  // change password 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
   })
@@ -272,10 +260,10 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Sections */}
+      {/* sections */}
       <div className="px-6 py-6 max-w-2xl mx-auto space-y-4">
 
-        {/* ── Personal Details ──────────────────────────────────────────── */}
+        {/*  personal details */}
         <Section
           id="settings-details-section"
           title="Personal Details"
@@ -375,7 +363,7 @@ export default function SettingsPage() {
           </form>
         </Section>
 
-        {/* ── Change Password ───────────────────────────────────────────── */}
+        {/* change password */}
         <Section
           id="settings-password-section"
           title="Change Password"
@@ -463,7 +451,7 @@ export default function SettingsPage() {
           </form>
         </Section>
 
-        {/* ── Lender Account (is_lender only) ──────────────────────────── */}
+        {/* lender account (is_lender only) */}
         {isLender && (
           <Section
             id="settings-lender-section"

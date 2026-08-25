@@ -1,12 +1,5 @@
 'use client'
 
-/**
- * Track Deposits — /lender/track-deposits
- *
- * Lender's dashboard for viewing all their lender_deposits and
- * lender_withdrawals. Shows summary stats and a per-deposit card
- * for each status group (active, pending, matured, past).
- */
 
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -25,7 +18,7 @@ import { formatCurrency, getStatusColor } from '@/lib/types'
 import type { LenderProfile, LenderDeposit, LenderWithdrawal } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+
 
 interface TrackData {
   profile: LenderProfile | null
@@ -33,7 +26,6 @@ interface TrackData {
   withdrawals: LenderWithdrawal[]
 }
 
-// ─── Fetcher ──────────────────────────────────────────────────────────────────
 
 async function fetchTrackData(userId: string): Promise<TrackData> {
   const supabase = createClient()
@@ -59,7 +51,6 @@ async function fetchTrackData(userId: string): Promise<TrackData> {
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -82,7 +73,7 @@ function DepositCard({ deposit }: { deposit: LenderDeposit }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-      {/* Top row */}
+      {/* top row */}
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs text-gray-400 font-semibold tracking-widest uppercase">Principal</p>
@@ -93,7 +84,7 @@ function DepositCard({ deposit }: { deposit: LenderDeposit }) {
         <StatusBadge status={deposit.status} />
       </div>
 
-      {/* Detail grid */}
+      {/* details */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div>
           <p className="text-xs text-gray-400">Return rate</p>
@@ -178,8 +169,6 @@ function WithdrawalRow({ w }: { w: LenderWithdrawal }) {
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function TrackDepositsPage() {
   const { profile } = useAuth()
   const userId = profile?.id
@@ -229,7 +218,7 @@ export default function TrackDepositsPage() {
         </div>
       </div>
 
-      {/* Body */}
+      {/* body */}
       <div className="px-6 py-6 max-w-3xl mx-auto space-y-8">
 
 
@@ -258,7 +247,7 @@ export default function TrackDepositsPage() {
           </div>
         ) : (
           <>
-            {/* Matured — action needed */}
+            {/* matured  */}
             {matured.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-4">
@@ -274,7 +263,7 @@ export default function TrackDepositsPage() {
               </section>
             )}
 
-            {/* Active */}
+            {/* active */}
             {active.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-4">
@@ -290,7 +279,7 @@ export default function TrackDepositsPage() {
               </section>
             )}
 
-            {/* Pending admin review */}
+            {/* pending admin review */}
             {pending.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-4">
@@ -306,7 +295,7 @@ export default function TrackDepositsPage() {
               </section>
             )}
 
-            {/* Past */}
+            {/* past deposits */}
             {past.length > 0 && (
               <section>
                 <div className="flex items-center gap-2 mb-4">

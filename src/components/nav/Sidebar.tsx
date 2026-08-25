@@ -1,16 +1,5 @@
 'use client'
 
-/**
- * Sidebar — Desktop navigation (md+ only)
- *
- * Visible only on md+ screens (hidden on mobile — BottomNav handles mobile).
- *
- * Student nav:  Home | Apply | Track Loans | E-Wallet | Profile | Settings
- * Lender nav:   Home | Fund a Loan | Provide Capital | Track Deposits |
- *               Withdraw | E-Wallet | Profile | Settings
- * Admin items:  Loans | Deposits | Users
- */
-
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -37,7 +26,7 @@ interface NavItem {
   Icon: React.ElementType
 }
 
-/** Student-only items — lenders do NOT see Apply, Track Loans */
+//student only
 const studentItems: NavItem[] = [
   { href: '/home',     label: 'Home',        Icon: HomeIcon },
   { href: '/apply',    label: 'Apply',        Icon: FileTextIcon },
@@ -47,7 +36,7 @@ const studentItems: NavItem[] = [
   { href: '/settings', label: 'Settings',     Icon: SettingsIcon },
 ]
 
-/** Lender-only main nav — replaces the student nav entirely for is_lender accounts */
+//lender only
 const lenderMainItems: NavItem[] = [
   { href: '/home',                  label: 'Home',           Icon: HomeIcon },
   { href: '/lender/fund-loan',      label: 'Fund a Loan',    Icon: BanknoteIcon },
@@ -74,7 +63,7 @@ export function Sidebar({ role, isLender }: SidebarProps) {
   const router = useRouter()
 
   const isAdmin = role === 'admin' || role === 'finance_officer'
-  // Lenders get their own dedicated nav; students get the student nav
+  //lender and student have different navbar
   const mainItems = isAdmin ? adminItems : isLender ? lenderMainItems : studentItems
 
   const handleSignOut = async () => {

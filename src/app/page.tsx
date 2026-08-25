@@ -1,10 +1,4 @@
-/**
- * Root page — Server Component
- *
- * Immediately redirects users based on their session state.
- * The middleware also handles this, but having it here prevents a
- * brief "blank page" flash on the initial load.
- */
+
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 

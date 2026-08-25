@@ -14,7 +14,6 @@ interface Props {
   onBack: () => void
 }
 
-// ─── Term button ──────────────────────────────────────────────────────────────
 function TermBtn({
   months,
   selected,
@@ -39,7 +38,7 @@ function TermBtn({
   )
 }
 
-// ─── Pledge row ───────────────────────────────────────────────────────────────
+
 function PledgeRow({
   label,
   sublabel,
@@ -113,7 +112,7 @@ function PledgeRow({
   )
 }
 
-// ─── Step 2 ────────────────────────────────────────────────────────────────────
+
 
 export default function Step2LoanDetails({
   form,
@@ -364,7 +363,6 @@ export default function Step2LoanDetails({
         )}
       </div>
 
-      {/* Buttons */}
       <div className="flex gap-4">
         <button
           onClick={onBack}

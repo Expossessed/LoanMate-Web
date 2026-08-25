@@ -1,17 +1,5 @@
 'use client'
 
-/**
- * Register Page — migrated from Flutter RegisterScreen
- *
- * Business rules preserved exactly:
- * 1. Account type: Student | Lender (Admin cannot self-register)
- * 2. Students require course + year level fields
- * 3. Students must upload a Study Load file (web: <input type="file">)
- * 4. AI evaluation flow: spinner (3 s) → approval dialog → actual signup
- * 5. Lenders skip the AI step entirely
- * 6. signUp() inserts: users → wallet → notifications → transactions → documents
- * 7. Duplicate student_id → toast + "Log In" action
- */
 
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
@@ -42,8 +30,6 @@ import { createClient } from '@/lib/supabase/client'
 import { toEmail } from '@/lib/types'
 import { callGeminiEvaluate } from '@/lib/gemini-client'
 
-// ─── Zod schema ───────────────────────────────────────────────────────────────
-
 const registerSchema = z
   .object({
     accountType: z.enum(['Student', 'Lender']),
@@ -67,12 +53,8 @@ const registerSchema = z
 
 type RegisterForm = z.infer<typeof registerSchema>
 
-// ─── Sign-up function ─────────────────────────────────────────────────────────
-
 async function signUp(values: RegisterForm, studyLoadFile: File | null) {
   const supabase = createClient()
-
-  // 1. Create auth user
   const { data: auth, error: authErr } = await supabase.auth.signUp({
     email: toEmail(values.studentId),
     password: values.password,
@@ -90,7 +72,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
   const userId = auth.user.id
   const isStudent = values.accountType === 'Student'
 
-  // 2. Insert lean users row — role reflects actual account type
+  // insert users row 
   const { error: userErr } = await supabase.from('users').insert({
     id: userId,
     first_name: values.firstName,
@@ -101,7 +83,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
   })
   if (userErr) throw new Error(`Failed to create account: ${userErr.message}`)
 
-  // 3. Upload document (Study Load for students, Valid ID for lenders)
+  // upload document (Study Load for students, Valid ID for lenders)
   let requirementsUrl = ''
   if (studyLoadFile) {
     const ext = studyLoadFile.name.split('.').pop()?.toLowerCase() ?? 'jpg'
@@ -116,10 +98,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     }
   }
 
-  // 4a. Insert student_profiles — required for ALL account types.
-  //     Lenders are university students too, so this row must always exist.
-  //     For lenders: requirements_url stores the Study Load (if provided at registration).
-  //     Requires RLS: allow insert with check (auth.uid() = id)
+  // insert student_profiles
   const { error: spErr } = await supabase.from('student_profiles').insert({
     id: userId,
     student_id: values.studentId,
@@ -127,14 +106,11 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     year_level: values.yearLevel ? parseInt(values.yearLevel, 10) : null,
     enrollment_status: 'enrolled',
     has_forfeiture_history: false,
-    // Students: their uploaded study load URL; lenders: null here (Valid ID goes to lender_profiles)
     requirements_url: isStudent ? (requirementsUrl || null) : null,
   })
   if (spErr) throw new Error(`Failed to save student profile: ${spErr.message}`)
 
-  // 4b. Insert lender_profiles row (lenders only)
-  //     requirements_url stores the Valid ID document URL.
-  //     Requires RLS: allow insert with check (auth.uid() = id)
+  // insert lender_profiles row (lenders only)
   if (!isStudent) {
     const { error: lpErr } = await supabase.from('lender_profiles').insert({
       id: userId,
@@ -143,7 +119,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     if (lpErr) throw new Error(`Failed to save lender profile: ${lpErr.message}`)
   }
 
-  // 5. Insert wallet — get back the id
+  // insert wallet
   const { data: walletRow, error: walletErr } = await supabase
     .from('wallet')
     .insert({ user_id: userId, balance: 0, savings_goal: 0, current_savings: 0 })
@@ -152,7 +128,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
   if (walletErr) console.warn('[signUp] wallet insert failed:', walletErr.message)
   const walletId = walletRow?.id as string | undefined
 
-  // 6. Welcome notification (non-fatal)
+  // welcome notification
   await supabase.from('notifications').insert({
     user_id: userId,
     type: 'Welcome',
@@ -161,7 +137,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     created_at: new Date().toISOString(),
   }).then(() => {}, () => {})
 
-  // 7. Init transaction (non-fatal)
+  // init transaction
   if (walletId) {
     await supabase.from('transactions').insert({
       wallet_id: walletId,
@@ -172,7 +148,7 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
     }).then(() => {}, () => {})
   }
 
-  // 8. Record the uploaded document (non-fatal)
+  // record the uploaded document
   if (requirementsUrl) {
     await supabase.from('documents').insert({
       user_id: userId,
@@ -186,7 +162,6 @@ async function signUp(values: RegisterForm, studyLoadFile: File | null) {
 
 
 
-// ─── AI Evaluation Dialog ─────────────────────────────────────────────────────
 
 const AI_STEPS = [
   'Scanning study load document...',
@@ -213,7 +188,6 @@ function AiEvaluatingDialog({
   const [rejectReason, setRejectReason] = useState('')
 
   useEffect(() => {
-    // Cycle through steps visually
     const iv = setInterval(() => {
       setDots((d) => {
         const next = (d + 1) % 4
@@ -222,7 +196,7 @@ function AiEvaluatingDialog({
       })
     }, 700)
 
-    // Call real Gemini
+    // calls gemini
     const files = studyLoadFile
       ? [{ file: studyLoadFile, label: 'Study Load' }]
       : []
@@ -240,13 +214,11 @@ function AiEvaluatingDialog({
         setRejectReason(res.reasoning)
         setResult('rejected')
       } else {
-        // approve or manual_review both allow registration
         setResult(res.recommendation === 'approve' ? 'approved' : 'manual_review')
       }
     })
 
     return () => clearInterval(iv)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (result === 'rejected') {
@@ -313,7 +285,7 @@ function AiEvaluatingDialog({
   )
 }
 
-// ─── Terms Dialog ─────────────────────────────────────────────────────────────
+
 
 function TermsDialog({ onClose }: { onClose: () => void }) {
   return (
@@ -343,7 +315,6 @@ function TermsDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-// ─── Register Page ────────────────────────────────────────────────────────────
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -384,9 +355,8 @@ export default function RegisterPage() {
     },
   })
 
-  /** Called by the form submit handler */
+
   const onSubmit = (values: RegisterForm) => {
-    // Students: require file + run AI step first
     if (values.accountType === 'Student' && !studyLoadFile) {
       toast.warning('Please upload your Study Load photo to continue.')
       return
@@ -399,7 +369,7 @@ export default function RegisterPage() {
     mutation.mutate(values)
   }
 
-  /** Called when user clicks Continue in the AI Approved dialog */
+
   const handleAiApproved = () => {
     setShowAi(false)
     setAiApproved(true)
@@ -409,7 +379,6 @@ export default function RegisterPage() {
     }
   }
 
-  /** Called when AI rejects the study load */
   const handleAiRejected = (reason: string) => {
     setShowAi(false)
     toast.error(`Document rejected: ${reason}`)
@@ -418,7 +387,7 @@ export default function RegisterPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null
     setStudyLoadFile(file)
-    setAiApproved(false) // reset if file changes
+    setAiApproved(false)
   }
 
   return (
@@ -435,7 +404,6 @@ export default function RegisterPage() {
       {showTerms && <TermsDialog onClose={() => setShowTerms(false)} />}
 
       <div className="min-h-screen lg:min-h-0 flex flex-col bg-gray-50">
-        {/* ── Green app bar ──────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 pt-12 pb-5 bg-[var(--brand-green)]">
           <Link href="/login" className="text-white/80 hover:text-white text-sm font-medium">
             ← Back
@@ -445,7 +413,6 @@ export default function RegisterPage() {
         </div>
 
         <div className="flex-1 px-6 py-6 overflow-y-auto">
-          {/* Logo */}
           <div className="flex flex-col items-center mb-6">
             <span className="flex items-center justify-center w-20 h-20 rounded-full bg-[var(--brand-green)] mb-3">
               <WalletIcon size={40} className="text-white" />
@@ -455,7 +422,7 @@ export default function RegisterPage() {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate>
-            {/* Account type toggle */}
+
             <p className="text-sm text-gray-700 mb-3">Choose your account type to get started</p>
             <div className="flex gap-1 p-1 bg-gray-200 rounded-2xl mb-6">
               {(['Student', 'Lender'] as const).map((type) => (
@@ -478,10 +445,10 @@ export default function RegisterPage() {
               ))}
             </div>
 
-            {/* Form card */}
+
             <div className="bg-white rounded-2xl shadow p-5 space-y-4">
 
-              {/* ID field */}
+
               <Field
                 id="reg-student-id"
                 label={accountType === 'Student' ? 'Student ID' : 'ID Number'}
@@ -511,7 +478,7 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Course + Year — students only */}
+              {/* Course + Year for students registration only */}
               {accountType === 'Student' && (
                 <div className="grid grid-cols-2 gap-3">
                   <Field
@@ -554,7 +521,7 @@ export default function RegisterPage() {
                 {...register('confirmPassword')}
               />
 
-              {/* Study load upload — students only */}
+              {/* Study load upload for students registration only */}
               {accountType === 'Student' && (
                 <>
                   <input
@@ -649,7 +616,7 @@ export default function RegisterPage() {
                 )}
               </button>
 
-              {/* Login link */}
+              {/* Login link button */}
               <p className="text-center text-sm text-gray-500">
                 Already have an account?{' '}
                 <Link href="/login" className="text-[var(--brand-green)] font-semibold hover:underline">
@@ -666,7 +633,7 @@ export default function RegisterPage() {
   )
 }
 
-// ─── Shared form field components ─────────────────────────────────────────────
+
 
 import React from 'react'
 import type { LucideIcon } from 'lucide-react'

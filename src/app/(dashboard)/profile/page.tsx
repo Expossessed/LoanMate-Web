@@ -1,13 +1,5 @@
 'use client'
 
-/**
- * Profile Page — migrated from Flutter ProfileTab
- *
- * Data: users profile + pending pledge count (loan_pledges where
- *   pledger_id = me AND borrower_self = false AND status = 'pending')
- *
- * Responsive: single-column on mobile, centred max-w-lg card on desktop
- */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
@@ -24,7 +16,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 
-// ─── Data fetcher ─────────────────────────────────────────────────────────────
+
 
 async function fetchPendingPledges(userId: string): Promise<number> {
   const supabase = createClient()
@@ -37,7 +29,6 @@ async function fetchPendingPledges(userId: string): Promise<number> {
   return data?.length ?? 0
 }
 
-// ─── Settings tile ────────────────────────────────────────────────────────────
 
 function SettingsTile({
   id,
@@ -110,7 +101,6 @@ function SettingsTile({
   )
 }
 
-// ─── Profile Page ─────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -154,7 +144,7 @@ export default function ProfilePage() {
     <div className="px-6 pt-12 pb-10 max-w-lg mx-auto lg:pt-16">
       <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
 
-      {/* ── Profile header card ─────────────────────────────────────── */}
+      {/* Profile header card */}
       <div className="flex items-center gap-5 p-6 bg-white rounded-2xl shadow-sm mb-8">
         {/* Avatar */}
         <div className="flex items-center justify-center w-[72px] h-[72px] rounded-full bg-[var(--brand-green-100)] shrink-0">
@@ -183,7 +173,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Settings tiles ──────────────────────────────────────────── */}
+      {/* Settings tiles */}
       <div className="space-y-3 mb-12">
         <SettingsTile
           id="edit-personal-details-btn"
@@ -203,7 +193,7 @@ export default function ProfilePage() {
           label="Account Settings"
           href="/settings"
         />
-        {/* Pledge Inbox — shows badge when there are pending invites */}
+        {/* pledge inbox, shows badge when there are pending invites */}
         <SettingsTile
           id="pledge-inbox-btn"
           Icon={HandshakeIcon}
@@ -213,7 +203,7 @@ export default function ProfilePage() {
           href="/pledge-inbox"
         />
 
-        {/* Lender tiles — mobile only (desktop uses the sidebar) */}
+        {/* lender tiles - mobile only, desktop uses the sidebar */}
         {isLender && (
           <>
             <div className="pt-2 pb-1">
@@ -243,7 +233,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* ── Sign out ────────────────────────────────────────────────── */}
+      {/* sign out */}
       <button
         id="profile-signout-btn"
         type="button"

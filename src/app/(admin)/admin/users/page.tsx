@@ -6,8 +6,6 @@ import { createClient } from '@/lib/supabase/client'
 
 async function fetchUsers() {
   const supabase = createClient()
-  // admin_get_all_students RPC joins student_profiles to return
-  // enrollment_status, student_id, course, and year_level.
   const { data } = await supabase.rpc('admin_get_all_students')
   return (data ?? []) as Record<string, unknown>[]
 }
@@ -22,7 +20,6 @@ export default function AdminUsersPage() {
     setProcessing(p => new Set(p).add(userId))
     try {
       const supabase = createClient()
-      // admin_update_enrollment_status RPC updates student_profiles.enrollment_status
       await supabase.rpc('admin_update_enrollment_status', { p_user_id: userId, p_status: newStatus })
       toast.success(`User ${newStatus === 'Active' ? 'restored' : 'suspended'}.`)
       qc.invalidateQueries({ queryKey: ['admin-users'] })

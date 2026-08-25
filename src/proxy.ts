@@ -1,17 +1,4 @@
-/**
- * Next.js Middleware — Supabase session refresh
- *
- * This middleware runs on every non-static request and refreshes the
- * Supabase Auth session by updating the cookie before the page renders.
- * Without this, Server Components may see a stale/missing session even
- * when the user is actually logged in.
- *
- * Protected route logic:
- * - Unauthenticated users hitting /home, /loans, /wallet, etc.
- *   are redirected to /login.
- * - Authenticated users hitting /login or /register are redirected
- *   to their appropriate dashboard.
- */
+
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 

@@ -1,9 +1,3 @@
-/**
- * callGeminiEvaluate — client-side helper that sends images + metadata to
- * the server-side /api/ai-evaluate route (which keeps the API key secret).
- *
- * Converts File objects to base64 data-URIs before sending.
- */
 
 import type { AiResult } from '@/lib/apply-helpers'
 

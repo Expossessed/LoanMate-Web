@@ -1,21 +1,5 @@
 'use client'
 
-/**
- * Fund a Loan — /lender/fund-loan
- *
- * Shows all admin-approved loans available for lender funding.
- * First-come, first-serve: the first lender who clicks "Fund This Loan" claims it.
- *
- * Return rate is tiered by loan type (repayment term):
- *   Urgent   → 3 months  → 3% return
- *   Standard → 6 months  → 5% return
- *   Flexible → 12 months → 8% return
- *
- * Longer wait = higher reward (time-value-of-money principle).
- *
- * DB note (capstone): loan linkage stored in lender_deposits.notes as "loan:<uuid>".
- * In production, add a loan_id FK column to lender_deposits.
- */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -34,28 +18,24 @@ import type { LenderProfile } from '@/lib/types'
 import { useAuth } from '@/hooks/useAuth'
 import Link from 'next/link'
 
-// ─── Term / Return config ─────────────────────────────────────────────────────
-//
-// Return rate scales with how long the lender's capital is locked up.
-// Longer repayment term = lender waits longer = higher reward.
 
 const TERM_CONFIG = {
   urgent: {
     label: 'Urgent',
     termMonths: 3,
-    rate: 0.03,       // 3%
+    rate: 0.03,
     color: 'bg-orange-50 text-orange-700 border-orange-200',
   },
   standard: {
     label: 'Standard',
     termMonths: 6,
-    rate: 0.05,       // 5%
+    rate: 0.05,
     color: 'bg-blue-50 text-blue-700 border-blue-200',
   },
   flexible: {
     label: 'Flexible',
     termMonths: 12,
-    rate: 0.08,       // 8%
+    rate: 0.08,
     color: 'bg-purple-50 text-purple-700 border-purple-200',
   },
 } as const
@@ -66,7 +46,6 @@ function getTermConfig(loanType: string) {
   return TERM_CONFIG[loanType as LoanType] ?? { label: loanType, termMonths: 6, rate: 0.05, color: 'bg-gray-50 text-gray-700 border-gray-200' }
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface FundableLoan {
   id: string
@@ -77,8 +56,6 @@ interface FundableLoan {
   created_at: string
   borrower_name: string
 }
-
-// ─── Fetchers ─────────────────────────────────────────────────────────────────
 
 async function fetchFundableLoans(): Promise<FundableLoan[]> {
   const supabase = createClient()
@@ -91,7 +68,7 @@ async function fetchFundableLoans(): Promise<FundableLoan[]> {
 
   if (!loans?.length) return []
 
-  // Which loans are already claimed
+  // loans claimed
   const loanNoteKeys = loans.map((l) => `loan:${l.id}`)
   const { data: claimed } = await supabase
     .from('lender_deposits')
@@ -99,7 +76,7 @@ async function fetchFundableLoans(): Promise<FundableLoan[]> {
     .in('notes', loanNoteKeys)
   const claimedSet = new Set((claimed ?? []).map((d) => String(d.notes ?? '')))
 
-  // Borrower names
+  // borrower names
   const userIds = [...new Set(loans.map((l) => String(l.user_id)))]
   const { data: users } = await supabase
     .from('users')
@@ -132,12 +109,11 @@ async function fetchLenderProfile(userId: string): Promise<LenderProfile | null>
   return data as LenderProfile | null
 }
 
-// ─── Mutation ─────────────────────────────────────────────────────────────────
 
 async function fundLoan(lenderId: string, loan: FundableLoan) {
   const supabase = createClient()
 
-  // Race guard: re-check before inserting
+  // Race guard
   const { data: existing } = await supabase
     .from('lender_deposits')
     .select('id')
@@ -168,13 +144,12 @@ async function fundLoan(lenderId: string, loan: FundableLoan) {
   if (error) throw new Error(error.message)
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-// ─── Rate Table ───────────────────────────────────────────────────────────────
+
 
 function RateTable() {
   return (
@@ -208,8 +183,6 @@ function RateTable() {
     </div>
   )
 }
-
-// ─── Loan Card ────────────────────────────────────────────────────────────────
 
 function LoanCard({
   loan,
@@ -267,7 +240,7 @@ function LoanCard({
         </div>
       </div>
 
-      {/* Borrower + term info */}
+      {/* borrower & term info */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
         <BanknoteIcon size={15} className="text-gray-400" />
         <span>Borrower: <span className="font-semibold text-gray-700">{loan.borrower_name}</span></span>
@@ -299,12 +272,12 @@ function LoanCard({
               : 'bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)] active:scale-[0.98]',
           ].join(' ')}
         >
-          Fund This Loan — Earn {(rate * 100).toFixed(0)}% in {termMonths} mo.
+          Fund This Loan - Earn {(rate * 100).toFixed(0)}% in {termMonths} mo.
         </button>
       ) : (
         <div className="space-y-2">
           <p className="text-sm text-center text-gray-700 font-medium">
-            Commit {formatCurrency(loan.amount)} · Earn +{formatCurrency(expectedReturn)} in {termMonths} months?
+            Commit {formatCurrency(loan.amount)} - Earn +{formatCurrency(expectedReturn)} in {termMonths} months?
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -328,7 +301,7 @@ function LoanCard({
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+
 
 export default function FundLoanPage() {
   const { profile } = useAuth()
